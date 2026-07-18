@@ -32,34 +32,43 @@ export async function generateWelcomeEmail(
 ): Promise<{ subject: string; html: string }> {
   const { routeName, routeCode, buyerName, whatsappGroupLink, driveFolderLink } = params;
 
-  const systemPrompt = `You are writing a friendly, professional welcome email to a new transport route buyer.
-Write in a warm but concise style. Output ONLY a valid JSON object with exactly two keys:
+  const systemPrompt = `You are writing a welcome email on behalf of MSTS, a product delivery company, to a customer who has just been added to a delivery route.
+This is NOT a business partnership email — the customer is a buyer who will receive products delivered to them through this route.
+Write in a friendly, clear, practical tone — like a delivery service welcoming a new customer.
+Output ONLY a valid JSON object with exactly two keys:
 "subject" (string) and "html" (string containing simple HTML with <p>, <a>, <strong> tags only, no full document tags like <html>/<body>).
 Do not wrap in markdown code blocks.`;
 
   const linksSection = [
     whatsappGroupLink
-      ? `WhatsApp Group: ${whatsappGroupLink}`
+      ? `WhatsApp Group Link: ${whatsappGroupLink}`
       : null,
     driveFolderLink
-      ? `Google Drive Folder: ${driveFolderLink}`
+      ? `Google Drive Folder Link: ${driveFolderLink}`
       : null,
   ]
     .filter(Boolean)
     .join('\n');
 
-  const userPrompt = `Write a welcome email for a new buyer joining route "${routeName}" (code: ${routeCode}).
-Buyer's name: ${buyerName}
+  const userPrompt = `Write a welcome email to a new customer named ${buyerName} who has been added to our delivery route "${routeName}" (route code: ${routeCode}).
 
-${linksSection || 'No resource links available for this route yet.'}
+Context:
+- MSTS is a product delivery company
+- The customer will be receiving products delivered to them through this route
+- This email should feel like a practical, warm onboarding message from a delivery service
+
+${linksSection || ''}
 
 Instructions:
-- Greet the buyer warmly by first name
-- Welcome them to the ${routeName} route
-${whatsappGroupLink ? '- Mention the WhatsApp group and include the link with a clear call-to-action button or anchor' : '- Do NOT mention any WhatsApp group'}
-${driveFolderLink ? '- Mention the shared Google Drive folder and include the link; say they now have view access' : '- Do NOT mention any Drive folder'}
-- Keep it 3–4 short paragraphs
-- Close with "MSTS Operations Team"`;
+- Address the customer by first name
+- Let them know they've been added to the ${routeName} delivery route (mention the route code ${routeCode})
+- Briefly explain what to expect: their orders will be delivered through this route
+${whatsappGroupLink ? `- Tell them to join the WhatsApp group for delivery updates, schedules, and announcements — include this link clearly: ${whatsappGroupLink}` : '- Do NOT mention any WhatsApp group'}
+${driveFolderLink ? `- Tell them they can find delivery-related documents (invoices, schedules, etc.) in the shared Google Drive folder — include this link: ${driveFolderLink}` : '- Do NOT mention any Drive folder'}
+- Keep it short: 3 paragraphs max
+- Tone: helpful, practical, friendly — not corporate or formal
+- Close with "MSTS Operations Team"
+- Subject line should be specific, e.g. "Welcome to the ${routeName} Delivery Route — Here's What to Expect"`;
 
   const resp = await getGrokClient().chat.completions.create({
     model: 'openai/gpt-oss-120b',
