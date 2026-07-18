@@ -90,10 +90,12 @@ export function RouteDetail() {
         address: bAddress,
         fareAmount: Number(bFare),
         status: bStatus,
+        joinDate: bJoinDate,
       });
       toast({ title: 'Buyer added', description: `${bName} has been registered.` });
       setIsAddBuyerOpen(false);
       setBName(''); setBEmail(''); setBPhone(''); setBAddress(''); setBFare('');
+      setBJoinDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -370,15 +372,21 @@ export function RouteDetail() {
                   <Input id="bFare" type="number" placeholder="1200" value={bFare} onChange={e => setBFare(e.target.value)} required />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={bStatus} onValueChange={(v: any) => setBStatus(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={bStatus} onValueChange={(v: any) => setBStatus(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bJoinDate">Join Date</Label>
+                  <Input id="bJoinDate" type="date" value={bJoinDate} onChange={e => setBJoinDate(e.target.value)} />
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button type="button" variant="outline" onClick={() => setIsAddBuyerOpen(false)}>Cancel</Button>
@@ -553,6 +561,7 @@ export function RouteDetail() {
                 <TableHead className="text-xs font-semibold">Buyer</TableHead>
                 <TableHead className="text-xs font-semibold">Version</TableHead>
                 <TableHead className="text-xs font-semibold">Address</TableHead>
+                <TableHead className="text-xs font-semibold">Joined</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Fare</TableHead>
                 <TableHead className="text-xs font-semibold">Status</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
@@ -562,7 +571,7 @@ export function RouteDetail() {
               <AnimatePresence>
                 {filteredBuyers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-40 text-center">
+                    <TableCell colSpan={7} className="h-40 text-center">
                       <div className="flex flex-col items-center justify-center text-muted-foreground gap-2">
                         <Users size={24} className="opacity-30" />
                         <p className="text-sm">No buyers yet. Add one above.</p>
@@ -593,6 +602,9 @@ export function RouteDetail() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
                           {buyer.address || '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {buyer.joinDate || '—'}
                         </TableCell>
                         <TableCell className="text-right text-sm font-semibold text-foreground">
                           ₹{buyer.fareAmount}
@@ -626,18 +638,20 @@ export function RouteDetail() {
                                 Make Active
                               </Button>
                             )}
-                            {/* Email button — only if buyer has email and not yet sent */}
-                            {buyer.email && !buyer.emailSent && (
+                            {/* Email button — preview if not sent, "Send Again" if already sent */}
+                            {buyer.email && (
                               <Button
                                 variant="ghost" size="sm"
-                                className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-1"
+                                className={`h-7 text-xs gap-1 ${buyer.emailSent
+                                  ? 'text-muted-foreground hover:text-blue-600 hover:bg-blue-50'
+                                  : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'}`}
                                 onClick={() => handlePreviewEmail(buyer.id)}
                                 disabled={isSending || (previewLoading && previewBuyerId === buyer.id)}
                               >
                                 {isSending || (previewLoading && previewBuyerId === buyer.id)
                                   ? <Loader2 size={12} className="animate-spin" />
-                                  : <Eye size={12} />}
-                                Email
+                                  : buyer.emailSent ? <Send size={12} /> : <Eye size={12} />}
+                                {buyer.emailSent ? 'Send Again' : 'Email'}
                               </Button>
                             )}
                             <Button
