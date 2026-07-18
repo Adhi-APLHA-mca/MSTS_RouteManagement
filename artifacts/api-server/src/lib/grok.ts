@@ -9,7 +9,7 @@ function getGrokClient(): OpenAI {
     }
     _grok = new OpenAI({
       apiKey: process.env.GROK_API_KEY,
-      baseURL: 'https://api.x.ai/v1',
+      baseURL: 'https://api.groq.com/openai/v1',
     });
   }
   return _grok;
@@ -58,7 +58,7 @@ ${driveFolderLink ? '- Mention the shared Google Drive folder and include the li
 - Close with "MSTS Operations Team"`;
 
   const resp = await getGrokClient().chat.completions.create({
-    model: 'grok-3-mini',
+    model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
