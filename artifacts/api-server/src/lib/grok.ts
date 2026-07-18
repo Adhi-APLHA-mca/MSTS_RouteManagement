@@ -58,7 +58,7 @@ ${driveFolderLink ? '- Mention the shared Google Drive folder and include the li
 - Close with "MSTS Operations Team"`;
 
   const resp = await getGrokClient().chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
