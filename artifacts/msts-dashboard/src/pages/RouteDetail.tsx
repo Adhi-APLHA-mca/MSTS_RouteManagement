@@ -52,6 +52,7 @@ export function RouteDetail() {
   const [importVersion, setImportVersion] = useState(route?.versions[0]?.id || '');
   const [isDragOver, setIsDragOver] = useState(false);
   const [sendEmailFlags, setSendEmailFlags] = useState<Record<number, boolean>>({});   // index → send?
+  const [existingRowIndices, setExistingRowIndices] = useState<Record<number, boolean>>({});  // index → already in system?
 
   // Email preview
   const [emailPreview, setEmailPreview] = useState<{ subject: string; html: string } | null>(null);
@@ -112,10 +113,22 @@ export function RouteDetail() {
       complete: (results) => {
         const rows = results.data as any[];
         setParsedRows(rows);
-        // Default: all rows flagged for email
+
+        // Build a set of existing buyer emails (lowercase) to detect duplicates
+        const existingEmails = new Set(
+          buyers.map(b => b.email?.toLowerCase()).filter(Boolean)
+        );
+
         const flags: Record<number, boolean> = {};
-        rows.forEach((_, i) => { flags[i] = true; });
+        const existing: Record<number, boolean> = {};
+        rows.forEach((row, i) => {
+          const email = (row.Email || row.email || '').trim().toLowerCase();
+          const isDuplicate = !!email && existingEmails.has(email);
+          existing[i] = isDuplicate;
+          flags[i] = !isDuplicate; // only pre-check new buyers
+        });
         setSendEmailFlags(flags);
+        setExistingRowIndices(existing);
       },
       error: (error) => toast({ title: 'Error parsing CSV', description: error.message, variant: 'destructive' }),
     });
@@ -138,7 +151,20 @@ export function RouteDetail() {
     if (!parsedRows.length) return;
     try {
       setSubmitting(true);
-      const newBuyersData = parsedRows.map(row => ({
+
+      // Only import rows that are NOT already in the system
+      const newRows = parsedRows
+        .map((row, i) => ({ row, i }))
+        .filter(({ i }) => !existingRowIndices[i]);
+
+      const skipped = parsedRows.length - newRows.length;
+
+      if (!newRows.length) {
+        toast({ title: 'Nothing to import', description: 'All rows in this CSV are already in the system.', variant: 'destructive' });
+        return;
+      }
+
+      const newBuyersData = newRows.map(({ row }) => ({
         routeVersionId: importVersion,
         name: row.Name || row.name || 'Unknown',
         email: row.Email || row.email || null,
@@ -151,8 +177,12 @@ export function RouteDetail() {
 
       const created = await addBuyers(route.id, newBuyersData);
 
-      // Send emails to checked rows
-      const toEmail = created.filter((_, i) => sendEmailFlags[i] && newBuyersData[i].email);
+      // Send emails only to newly created buyers whose checkbox is checked
+      const toEmail = created.filter((_, idx) => {
+        const origIndex = newRows[idx].i;
+        return sendEmailFlags[origIndex] && newBuyersData[idx].email;
+      });
+
       if (toEmail.length > 0) {
         toast({ title: 'Sending welcome emails…', description: `Sending to ${toEmail.length} buyer${toEmail.length > 1 ? 's' : ''}` });
         try {
@@ -168,9 +198,13 @@ export function RouteDetail() {
         }
       }
 
-      toast({ title: 'Import complete', description: `${created.length} buyers added.` });
+      toast({
+        title: 'Import complete',
+        description: `${created.length} new buyer${created.length !== 1 ? 's' : ''} added${skipped > 0 ? `, ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped` : ''}.`,
+      });
       setIsImportOpen(false);
       setParsedRows([]);
+      setExistingRowIndices({});
     } catch (err: any) {
       toast({ title: 'Import failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -444,6 +478,11 @@ export function RouteDetail() {
                       <div className="flex items-center gap-2">
                         <CheckCircle2 size={14} className="text-emerald-500" />
                         <span className="text-sm font-medium">{parsedRows.length} rows found</span>
+                        {Object.values(existingRowIndices).filter(Boolean).length > 0 && (
+                          <span className="text-amber-600 font-normal text-xs">
+                            · {Object.values(existingRowIndices).filter(Boolean).length} already added — will be skipped
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Label className="text-xs text-muted-foreground">Version:</Label>
@@ -483,25 +522,31 @@ export function RouteDetail() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {parsedRows.slice(0, 6).map((row, i) => (
-                            <TableRow key={i} className={sendEmailFlags[i] ? '' : 'opacity-50'}>
-                              <TableCell className="py-2">
-                                <Checkbox
-                                  checked={!!sendEmailFlags[i]}
-                                  onCheckedChange={checked => setSendEmailFlags(prev => ({ ...prev, [i]: !!checked }))}
-                                />
-                              </TableCell>
-                              <TableCell className="text-xs py-2 font-medium">{row.Name || row.name}</TableCell>
-                              <TableCell className="text-xs py-2 text-muted-foreground">{row.Email || row.email || '—'}</TableCell>
-                              <TableCell className="text-xs py-2 text-muted-foreground">{row.Phone || row.phone}</TableCell>
-                              <TableCell className="text-xs py-2">₹{row.Fare || row.fare}</TableCell>
-                              <TableCell className="text-xs py-2">
-                                {sendEmailFlags[i]
-                                  ? <span className="text-emerald-600 font-medium">✓ Send</span>
-                                  : <span className="text-muted-foreground">Skip</span>}
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {parsedRows.slice(0, 6).map((row, i) => {
+                            const isExisting = existingRowIndices[i];
+                            return (
+                              <TableRow key={i} className={isExisting ? 'opacity-40 bg-muted/30' : sendEmailFlags[i] ? '' : 'opacity-50'}>
+                                <TableCell className="py-2">
+                                  <Checkbox
+                                    checked={!isExisting && !!sendEmailFlags[i]}
+                                    disabled={isExisting}
+                                    onCheckedChange={checked => !isExisting && setSendEmailFlags(prev => ({ ...prev, [i]: !!checked }))}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs py-2 font-medium">{row.Name || row.name}</TableCell>
+                                <TableCell className="text-xs py-2 text-muted-foreground">{row.Email || row.email || '—'}</TableCell>
+                                <TableCell className="text-xs py-2 text-muted-foreground">{row.Phone || row.phone}</TableCell>
+                                <TableCell className="text-xs py-2">₹{row.Fare || row.fare}</TableCell>
+                                <TableCell className="text-xs py-2">
+                                  {isExisting
+                                    ? <span className="text-amber-600 font-medium text-xs">Already added</span>
+                                    : sendEmailFlags[i]
+                                      ? <span className="text-emerald-600 font-medium">✓ Send</span>
+                                      : <span className="text-muted-foreground">Skip</span>}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                           {parsedRows.length > 6 && (
                             <TableRow>
                               <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-2 bg-muted/20">
