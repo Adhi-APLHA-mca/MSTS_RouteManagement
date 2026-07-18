@@ -6,8 +6,8 @@ A route and buyer management dashboard for MSTS operations — tracks transport 
 
 Two workflows run the app (both configured in Replit):
 
-- **Dashboard** — `PORT=3000 BASE_PATH=/ pnpm --filter @workspace/msts-dashboard run dev` (port 3000, webview)
-- **API Server** — `PORT=8080 pnpm --filter @workspace/api-server run dev` (port 8080, console)
+- **Dashboard** — managed by `artifacts/msts-dashboard: web` workflow (port 5173, webview)
+- **API Server** — managed by `artifacts/api-server: API Server` workflow (port 8080, console)
 
 The Vite dev server proxies `/api` → `localhost:8080`, so both services work from one preview URL.
 
