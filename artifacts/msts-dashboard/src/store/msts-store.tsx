@@ -1,4 +1,14 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
+import { apiRoutes, apiBuyers, apiEmail, type CreateRoutePayload } from '@/lib/api';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RouteVersion {
   id: string;
@@ -12,7 +22,10 @@ export interface Route {
   id: string;
   name: string;
   code: string;
+  whatsappGroupLink?: string | null;
+  driveFolderLink?: string | null;
   versions: RouteVersion[];
+  createdAt?: string;
 }
 
 export interface Buyer {
@@ -20,121 +33,184 @@ export interface Buyer {
   routeId: string;
   routeVersionId: string;
   name: string;
+  email?: string | null;
   phone: string;
   address: string;
   fareAmount: number;
-  status: "active" | "inactive";
+  status: 'active' | 'inactive';
   joinDate: string;
   notes: string;
+  emailSent?: boolean;
+  emailSentAt?: string | null;
+  createdAt?: string;
 }
 
-interface MstsState {
+// ── Context ───────────────────────────────────────────────────────────────────
+
+interface MstsContextValue {
   routes: Route[];
-  buyers: Buyer[];
+  buyers: Buyer[];                  // buyers for the currently-loaded route
+  loading: boolean;
+  buyersLoading: boolean;
+  error: string | null;
+
+  // Route actions
+  refreshRoutes: () => Promise<void>;
+  addRoute: (data: CreateRoutePayload) => Promise<Route>;
+  updateRoute: (id: string, data: Partial<Route>) => Promise<void>;
+  addRouteVersion: (routeId: string, label: string, description: string) => Promise<RouteVersion>;
+
+  // Buyer actions (scoped to a routeId)
+  loadBuyers: (routeId: string) => Promise<void>;
+  addBuyer: (routeId: string, data: Partial<Buyer>) => Promise<Buyer>;
+  addBuyers: (routeId: string, data: Partial<Buyer>[]) => Promise<Buyer[]>;
+  updateBuyerStatus: (id: string, status: 'active' | 'inactive') => Promise<void>;
+  deleteBuyer: (id: string) => Promise<void>;
+
+  // Email agent
+  previewEmail: (routeId: string, buyerId: string) => Promise<{ subject: string; html: string }>;
+  sendEmails: (routeId: string, buyerIds: string[]) => Promise<{ buyerId: string; status: string; error?: string }[]>;
 }
 
-type Action =
-  | { type: 'ADD_ROUTE'; payload: Route }
-  | { type: 'ADD_ROUTE_VERSION'; payload: { routeId: string; version: RouteVersion } }
-  | { type: 'ADD_BUYER'; payload: Buyer }
-  | { type: 'ADD_BUYERS'; payload: Buyer[] }
-  | { type: 'UPDATE_BUYER_STATUS'; payload: { id: string; status: "active" | "inactive" } }
-  | { type: 'DELETE_BUYER'; payload: string };
+const MstsContext = createContext<MstsContextValue | null>(null);
 
-const seedRoutes: Route[] = [
-  {
-    id: "r1",
-    name: "Andheri - Dadar Fast",
-    code: "AD-01",
-    versions: [
-      { id: "v1-1", label: "v1", description: "Morning Express", isActive: true, createdAt: "2023-01-10T00:00:00Z" },
-      { id: "v1-2", label: "v1.1", description: "Evening Fast", isActive: true, createdAt: "2023-03-15T00:00:00Z" }
-    ]
-  },
-  {
-    id: "r2",
-    name: "Borivali - CST Express",
-    code: "BC-01",
-    versions: [
-      { id: "v2-1", label: "v1", description: "Regular daily", isActive: true, createdAt: "2023-02-01T00:00:00Z" }
-    ]
-  },
-  {
-    id: "r3",
-    name: "Thane - Vashi Link",
-    code: "TV-01",
-    versions: [
-      { id: "v3-1", label: "v1", description: "Weekday only", isActive: true, createdAt: "2023-04-20T00:00:00Z" },
-      { id: "v3-2", label: "v2", description: "Weekend special", isActive: true, createdAt: "2023-06-10T00:00:00Z" }
-    ]
-  }
-];
-
-const seedBuyers: Buyer[] = [
-  { id: "b1", routeId: "r1", routeVersionId: "v1-1", name: "Rahul Sharma", phone: "+91 98765 43210", address: "Andheri West, Mumbai", fareAmount: 1200, status: "active", joinDate: "2023-05-01", notes: "Prefers window seat" },
-  { id: "b2", routeId: "r1", routeVersionId: "v1-1", name: "Priya Patel", phone: "+91 98765 43211", address: "Vile Parle, Mumbai", fareAmount: 1200, status: "active", joinDate: "2023-05-03", notes: "" },
-  { id: "b3", routeId: "r1", routeVersionId: "v1-2", name: "Amit Singh", phone: "+91 98765 43212", address: "Dadar East, Mumbai", fareAmount: 1500, status: "inactive", joinDate: "2023-06-12", notes: "Suspended temp" },
-  { id: "b4", routeId: "r2", routeVersionId: "v2-1", name: "Sneha Desai", phone: "+91 98765 43213", address: "Borivali West, Mumbai", fareAmount: 2000, status: "active", joinDate: "2023-02-15", notes: "" },
-  { id: "b5", routeId: "r2", routeVersionId: "v2-1", name: "Vikram Reddy", phone: "+91 98765 43214", address: "Kandivali, Mumbai", fareAmount: 2000, status: "active", joinDate: "2023-03-20", notes: "" },
-  { id: "b6", routeId: "r3", routeVersionId: "v3-1", name: "Anita Kadam", phone: "+91 98765 43215", address: "Thane West, Thane", fareAmount: 800, status: "active", joinDate: "2023-05-10", notes: "" },
-  { id: "b7", routeId: "r3", routeVersionId: "v3-2", name: "Suresh Pillai", phone: "+91 98765 43216", address: "Airoli, Navi Mumbai", fareAmount: 950, status: "active", joinDate: "2023-06-25", notes: "" },
-  { id: "b8", routeId: "r3", routeVersionId: "v3-1", name: "Neha Gupta", phone: "+91 98765 43217", address: "Vashi Sector 17, Navi Mumbai", fareAmount: 800, status: "inactive", joinDate: "2023-05-11", notes: "Changed job" },
-];
-
-const initialState: MstsState = {
-  routes: seedRoutes,
-  buyers: seedBuyers,
-};
-
-function mstsReducer(state: MstsState, action: Action): MstsState {
-  switch (action.type) {
-    case 'ADD_ROUTE':
-      return { ...state, routes: [...state.routes, action.payload] };
-    case 'ADD_ROUTE_VERSION':
-      return {
-        ...state,
-        routes: state.routes.map(r => 
-          r.id === action.payload.routeId 
-            ? { ...r, versions: [...r.versions, action.payload.version] } 
-            : r
-        )
-      };
-    case 'ADD_BUYER':
-      return { ...state, buyers: [...state.buyers, action.payload] };
-    case 'ADD_BUYERS':
-      return { ...state, buyers: [...state.buyers, ...action.payload] };
-    case 'UPDATE_BUYER_STATUS':
-      return {
-        ...state,
-        buyers: state.buyers.map(b => 
-          b.id === action.payload.id ? { ...b, status: action.payload.status } : b
-        )
-      };
-    case 'DELETE_BUYER':
-      return {
-        ...state,
-        buyers: state.buyers.filter(b => b.id !== action.payload)
-      };
-    default:
-      return state;
-  }
-}
-
-const MstsContext = createContext<{
-  state: MstsState;
-  dispatch: React.Dispatch<Action>;
-}>({ state: initialState, dispatch: () => null });
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 export function MstsProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(mstsReducer, initialState);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [buyersLoading, setBuyersLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refreshRoutes = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await apiRoutes.list();
+      setRoutes(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refreshRoutes(); }, [refreshRoutes]);
+
+  // ── Route mutations ──────────────────────────────────────────────────────────
+
+  const addRoute = useCallback(async (data: CreateRoutePayload): Promise<Route> => {
+    const created = await apiRoutes.create(data);
+    setRoutes(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const updateRoute = useCallback(async (id: string, data: Partial<Route>) => {
+    const updated = await apiRoutes.update(id, data);
+    setRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+  }, []);
+
+  const addRouteVersion = useCallback(async (
+    routeId: string,
+    label: string,
+    description: string,
+  ): Promise<RouteVersion> => {
+    const version = await apiRoutes.addVersion(routeId, { label, description });
+    setRoutes(prev => prev.map(r =>
+      r.id === routeId ? { ...r, versions: [...r.versions, version] } : r,
+    ));
+    return version;
+  }, []);
+
+  // ── Buyer mutations ──────────────────────────────────────────────────────────
+
+  const loadBuyers = useCallback(async (routeId: string) => {
+    try {
+      setBuyersLoading(true);
+      const data = await apiRoutes.getBuyers(routeId);
+      setBuyers(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBuyersLoading(false);
+    }
+  }, []);
+
+  const addBuyer = useCallback(async (routeId: string, data: Partial<Buyer>): Promise<Buyer> => {
+    const created = await apiRoutes.addBuyer(routeId, data);
+    setBuyers(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const addBuyers = useCallback(async (routeId: string, data: Partial<Buyer>[]): Promise<Buyer[]> => {
+    const created = await apiRoutes.addBuyersBatch(routeId, data);
+    setBuyers(prev => [...created, ...prev]);
+    return created;
+  }, []);
+
+  const updateBuyerStatus = useCallback(async (id: string, status: 'active' | 'inactive') => {
+    await apiBuyers.update(id, { status });
+    setBuyers(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+  }, []);
+
+  const deleteBuyer = useCallback(async (id: string) => {
+    await apiBuyers.delete(id);
+    setBuyers(prev => prev.filter(b => b.id !== id));
+  }, []);
+
+  // ── Email agent ──────────────────────────────────────────────────────────────
+
+  const previewEmail = useCallback(
+    (routeId: string, buyerId: string) => apiEmail.preview(routeId, buyerId),
+    [],
+  );
+
+  const sendEmails = useCallback(async (routeId: string, buyerIds: string[]) => {
+    const { results } = await apiEmail.send(routeId, buyerIds);
+    // Update local emailSent state for successfully sent buyers
+    results
+      .filter(r => r.status === 'sent')
+      .forEach(r => {
+        setBuyers(prev =>
+          prev.map(b =>
+            b.id === r.buyerId
+              ? { ...b, emailSent: true, emailSentAt: new Date().toISOString() }
+              : b,
+          ),
+        );
+      });
+    return results;
+  }, []);
 
   return (
-    <MstsContext.Provider value={{ state, dispatch }}>
+    <MstsContext.Provider
+      value={{
+        routes,
+        buyers,
+        loading,
+        buyersLoading,
+        error,
+        refreshRoutes,
+        addRoute,
+        updateRoute,
+        addRouteVersion,
+        loadBuyers,
+        addBuyer,
+        addBuyers,
+        updateBuyerStatus,
+        deleteBuyer,
+        previewEmail,
+        sendEmails,
+      }}
+    >
       {children}
     </MstsContext.Provider>
   );
 }
 
 export function useMsts() {
-  return useContext(MstsContext);
+  const ctx = useContext(MstsContext);
+  if (!ctx) throw new Error('useMsts must be used within MstsProvider');
+  return ctx;
 }
