@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-20", "web", "bash"]
 
 [deployment]
 router = "application"
@@ -30,3 +30,6 @@ FIREBASE_APP_ID = "\"1:951205413692:web:7df5d7859e836dc49a1439\""
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = "587"
 SMTP_FROM = "teamtscr.aba@gmail.com"
+
+[nix]
+channel = "stable-25_05"
