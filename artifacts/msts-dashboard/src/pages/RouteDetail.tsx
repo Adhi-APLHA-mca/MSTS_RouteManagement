@@ -343,6 +343,10 @@ export function RouteDetail() {
               <div className="text-xl font-bold text-foreground">{buyers.length}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </div>
+            <div className="text-center px-4 py-2 rounded-xl bg-muted/60">
+              <div className="text-xl font-bold text-foreground">₹{buyers.reduce((s, b) => s + (b.fareAmount || 0), 0).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Total Fare</div>
+            </div>
           </div>
         </div>
       </div>
@@ -499,19 +503,22 @@ export function RouteDetail() {
 
                     {/* Preview table with email checkboxes */}
                     <div className="border border-border rounded-xl overflow-hidden">
+                      <div className="overflow-y-auto max-h-72">
                       <Table>
-                        <TableHeader className="bg-muted/50">
+                        <TableHeader className="bg-muted/50 sticky top-0 z-10">
                           <TableRow>
                             <TableHead className="text-xs w-8">
                               <Checkbox
-                                checked={parsedRows.every((_, i) => sendEmailFlags[i])}
+                                checked={parsedRows.filter((_, i) => !existingRowIndices[i]).every((_, __, arr) => arr.length > 0) &&
+                                  parsedRows.every((_, i) => existingRowIndices[i] || sendEmailFlags[i])}
                                 onCheckedChange={checked => {
-                                  const flags: Record<number, boolean> = {};
-                                  parsedRows.forEach((_, i) => { flags[i] = !!checked; });
+                                  const flags: Record<number, boolean> = { ...sendEmailFlags };
+                                  parsedRows.forEach((_, i) => { if (!existingRowIndices[i]) flags[i] = !!checked; });
                                   setSendEmailFlags(flags);
                                 }}
                               />
                             </TableHead>
+                            <TableHead className="text-xs">#</TableHead>
                             <TableHead className="text-xs">Name</TableHead>
                             <TableHead className="text-xs">Email</TableHead>
                             <TableHead className="text-xs">Phone</TableHead>
@@ -522,7 +529,7 @@ export function RouteDetail() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {parsedRows.slice(0, 6).map((row, i) => {
+                          {parsedRows.map((row, i) => {
                             const isExisting = existingRowIndices[i];
                             return (
                               <TableRow key={i} className={isExisting ? 'opacity-40 bg-muted/30' : sendEmailFlags[i] ? '' : 'opacity-50'}>
@@ -533,6 +540,7 @@ export function RouteDetail() {
                                     onCheckedChange={checked => !isExisting && setSendEmailFlags(prev => ({ ...prev, [i]: !!checked }))}
                                   />
                                 </TableCell>
+                                <TableCell className="text-xs py-2 text-muted-foreground">{i + 1}</TableCell>
                                 <TableCell className="text-xs py-2 font-medium">{row.Name || row.name}</TableCell>
                                 <TableCell className="text-xs py-2 text-muted-foreground">{row.Email || row.email || '—'}</TableCell>
                                 <TableCell className="text-xs py-2 text-muted-foreground">{row.Phone || row.phone}</TableCell>
@@ -547,15 +555,9 @@ export function RouteDetail() {
                               </TableRow>
                             );
                           })}
-                          {parsedRows.length > 6 && (
-                            <TableRow>
-                              <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-2 bg-muted/20">
-                                +{parsedRows.length - 6} more rows (all apply the same email rule)
-                              </TableCell>
-                            </TableRow>
-                          )}
                         </TableBody>
                       </Table>
+                      </div>
                     </div>
 
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -581,7 +583,8 @@ export function RouteDetail() {
           <div className="flex items-center gap-2">
             <Users size={15} className="text-muted-foreground" />
             <h3 className="font-semibold text-sm text-foreground">Buyers</h3>
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{buyers.length}</span>
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{buyers.length} items</span>
+            <span className="text-xs font-medium text-foreground bg-muted px-2 py-0.5 rounded-full">₹{buyers.reduce((s, b) => s + (b.fareAmount || 0), 0).toLocaleString()} total fare</span>
           </div>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
