@@ -80,4 +80,10 @@ export const apiEmail = {
       '/email/send',
       { method: 'POST', body: JSON.stringify({ routeId, buyerIds }) },
     ),
+
+  sendDraft: (routeId: string, buyerIds: string[], subject: string, body: string) =>
+    req<{ results: { buyerId: string; status: 'sent' | 'failed'; error?: string }[] }>(
+      '/email/draft',
+      { method: 'POST', body: JSON.stringify({ routeId, buyerIds, subject, body }) },
+    ),
 };

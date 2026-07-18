@@ -71,6 +71,7 @@ interface MstsContextValue {
   // Email agent
   previewEmail: (routeId: string, buyerId: string) => Promise<{ subject: string; html: string }>;
   sendEmails: (routeId: string, buyerIds: string[]) => Promise<{ buyerId: string; status: string; error?: string }[]>;
+  draftMail: (routeId: string, buyerIds: string[], subject: string, body: string) => Promise<{ buyerId: string; status: string; error?: string }[]>;
 }
 
 const MstsContext = createContext<MstsContextValue | null>(null);
@@ -169,7 +170,6 @@ export function MstsProvider({ children }: { children: ReactNode }) {
 
   const sendEmails = useCallback(async (routeId: string, buyerIds: string[]) => {
     const { results } = await apiEmail.send(routeId, buyerIds);
-    // Update local emailSent state for successfully sent buyers
     results
       .filter(r => r.status === 'sent')
       .forEach(r => {
@@ -181,6 +181,16 @@ export function MstsProvider({ children }: { children: ReactNode }) {
           ),
         );
       });
+    return results;
+  }, []);
+
+  const draftMail = useCallback(async (
+    routeId: string,
+    buyerIds: string[],
+    subject: string,
+    body: string,
+  ) => {
+    const { results } = await apiEmail.sendDraft(routeId, buyerIds, subject, body);
     return results;
   }, []);
 
@@ -203,6 +213,7 @@ export function MstsProvider({ children }: { children: ReactNode }) {
         deleteBuyer,
         previewEmail,
         sendEmails,
+        draftMail,
       }}
     >
       {children}

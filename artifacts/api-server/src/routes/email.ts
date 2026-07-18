@@ -114,4 +114,64 @@ router.post('/send', async (req, res) => {
   }
 });
 
+// POST /api/email/draft  — send a hand-composed email to selected buyers
+router.post('/draft', async (req, res) => {
+  try {
+    const { routeId, buyerIds, subject, body } = req.body as {
+      routeId: string;
+      buyerIds: string[];
+      subject: string;
+      body: string;
+    };
+
+    if (!subject || !body) {
+      return res.status(400).json({ error: 'subject and body are required' });
+    }
+
+    const routeDoc = await db.collection('routes').doc(routeId).get();
+    if (!routeDoc.exists) return res.status(404).json({ error: 'Route not found' });
+
+    // Convert plain text body → HTML (preserve line breaks)
+    const htmlBody = body
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1a1a1a;line-height:1.6">
+${htmlBody}
+</body></html>`;
+
+    const results: { buyerId: string; status: 'sent' | 'failed'; error?: string }[] = [];
+
+    for (const buyerId of buyerIds) {
+      try {
+        const buyerDoc = await db.collection('buyers').doc(buyerId).get();
+        if (!buyerDoc.exists) { results.push({ buyerId, status: 'failed', error: 'Buyer not found' }); continue; }
+        const buyer = buyerDoc.data()!;
+        if (!buyer.email) { results.push({ buyerId, status: 'failed', error: 'No email' }); continue; }
+
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM,
+          to: buyer.email,
+          subject,
+          html,
+        });
+
+        results.push({ buyerId, status: 'sent' });
+      } catch (err: any) {
+        logger.error({ err, buyerId }, 'Draft email send failed');
+        results.push({ buyerId, status: 'failed', error: err.message });
+      }
+    }
+
+    res.json({ results });
+  } catch (err: any) {
+    logger.error({ err }, 'Draft email route failed');
+    res.status(500).json({ error: err.message || 'Failed to send draft emails' });
+  }
+});
+
 export default router;

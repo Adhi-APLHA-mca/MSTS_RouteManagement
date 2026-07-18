@@ -3,6 +3,7 @@ import { useMsts, Buyer } from '@/store/msts-store';
 import { useParams, Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Upload, UserPlus, Search, FileSpreadsheet, Layers, Users,
   CheckCircle2, Trash2, Mail, MessageCircle, FolderOpen, Loader2, Eye, Send,
+  Pencil, PenLine,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +22,7 @@ import Papa from 'papaparse';
 
 export function RouteDetail() {
   const { routeId } = useParams();
-  const { routes, buyers, buyersLoading, loadBuyers, addBuyer, addBuyers, updateBuyerStatus, deleteBuyer, previewEmail, sendEmails } = useMsts();
+  const { routes, buyers, buyersLoading, loadBuyers, addBuyer, addBuyers, updateBuyerStatus, deleteBuyer, previewEmail, sendEmails, updateRoute, draftMail } = useMsts();
   const { toast } = useToast();
 
   const route = routes.find(r => r.id === routeId);
@@ -59,6 +61,81 @@ export function RouteDetail() {
   const [previewBuyerId, setPreviewBuyerId] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sendingEmails, setSendingEmails] = useState<string[]>([]);   // buyer IDs being sent
+
+  // Edit route
+  const [isEditRouteOpen, setIsEditRouteOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editDefaultFare, setEditDefaultFare] = useState('');
+  const [editWhatsapp, setEditWhatsapp] = useState('');
+  const [editDrive, setEditDrive] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Draft mail
+  const [isDraftMailOpen, setIsDraftMailOpen] = useState(false);
+  const [draftSubject, setDraftSubject] = useState('');
+  const [draftBody, setDraftBody] = useState('');
+  const [draftRecipients, setDraftRecipients] = useState<Set<string>>(new Set());
+  const [sendingDraft, setSendingDraft] = useState(false);
+
+  // ── Open edit dialog pre-filled ──────────────────────────────────────────────
+  const openEditRoute = () => {
+    setEditName(route?.name || '');
+    setEditCode(route?.code || '');
+    setEditDefaultFare(route?.defaultFare ? String(route.defaultFare) : '');
+    setEditWhatsapp(route?.whatsappGroupLink || '');
+    setEditDrive(route?.driveFolderLink || '');
+    setIsEditRouteOpen(true);
+  };
+
+  const handleEditRoute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!route || !editName || !editCode) return;
+    try {
+      setEditSubmitting(true);
+      await updateRoute(route.id, {
+        name: editName,
+        code: editCode,
+        defaultFare: editDefaultFare ? Number(editDefaultFare) : null,
+        whatsappGroupLink: editWhatsapp || null,
+        driveFolderLink: editDrive || null,
+      });
+      toast({ title: 'Route updated', description: 'Changes saved.' });
+      setIsEditRouteOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // ── Draft mail ───────────────────────────────────────────────────────────────
+  const openDraftMail = () => {
+    const withEmail = buyers.filter(b => b.email);
+    setDraftRecipients(new Set(withEmail.map(b => b.id)));
+    setIsDraftMailOpen(true);
+  };
+
+  const handleSendDraft = async () => {
+    if (!route || !draftSubject.trim() || !draftBody.trim() || draftRecipients.size === 0) return;
+    try {
+      setSendingDraft(true);
+      const results = await draftMail(route.id, [...draftRecipients], draftSubject, draftBody);
+      const sent = results.filter(r => r.status === 'sent').length;
+      const failed = results.filter(r => r.status === 'failed').length;
+      toast({
+        title: `Mail sent to ${sent} buyer${sent !== 1 ? 's' : ''}`,
+        description: failed > 0 ? `${failed} failed — check addresses.` : 'All delivered.',
+      });
+      setIsDraftMailOpen(false);
+      setDraftSubject('');
+      setDraftBody('');
+    } catch (err: any) {
+      toast({ title: 'Send failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingDraft(false);
+    }
+  };
 
   if (!route) {
     return (
@@ -294,6 +371,13 @@ export function RouteDetail() {
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h1 className="text-xl font-bold text-foreground">{route.name}</h1>
                 <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{route.code}</span>
+                <button
+                  onClick={openEditRoute}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground bg-muted hover:bg-accent px-2 py-0.5 rounded transition-colors"
+                >
+                  <Pencil size={10} />
+                  Edit
+                </button>
               </div>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {route.versions.map(v => (
@@ -352,7 +436,7 @@ export function RouteDetail() {
       </div>
 
       {/* Action cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-6">
         {/* Add Buyer */}
         <Dialog open={isAddBuyerOpen} onOpenChange={setIsAddBuyerOpen}>
           <DialogTrigger asChild>
@@ -575,6 +659,21 @@ export function RouteDetail() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Draft Mail */}
+        <motion.button
+          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+          onClick={openDraftMail}
+          className="flex items-center gap-3 p-5 bg-card border border-border rounded-xl cursor-pointer hover:border-primary/40 hover:bg-accent/30 transition-all"
+        >
+          <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+            <PenLine size={18} className="text-muted-foreground" />
+          </div>
+          <div className="text-left">
+            <p className="font-semibold text-sm text-foreground">Draft Mail</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Compose &amp; send to buyers</p>
+          </div>
+        </motion.button>
       </div>
 
       {/* Buyers Table */}
@@ -721,6 +820,141 @@ export function RouteDetail() {
           </Table>
         )}
       </div>
+
+      {/* Edit Route dialog */}
+      <Dialog open={isEditRouteOpen} onOpenChange={setIsEditRouteOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Pencil size={15} /> Edit Route</DialogTitle></DialogHeader>
+          <form onSubmit={handleEditRoute} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="eName">Route Name</Label>
+                <Input id="eName" value={editName} onChange={e => setEditName(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eCode">Route Code</Label>
+                <Input id="eCode" value={editCode} onChange={e => setEditCode(e.target.value)} required placeholder="KCL-DS-PRE" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="eFare">Default Fare (₹)</Label>
+              <Input id="eFare" type="number" value={editDefaultFare} onChange={e => setEditDefaultFare(e.target.value)} placeholder="1200" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="eWa" className="flex items-center gap-1.5"><MessageCircle size={12} className="text-green-600" /> WhatsApp Group Link</Label>
+              <Input id="eWa" value={editWhatsapp} onChange={e => setEditWhatsapp(e.target.value)} placeholder="https://chat.whatsapp.com/…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="eDrive" className="flex items-center gap-1.5"><FolderOpen size={12} className="text-blue-600" /> Drive Folder Link</Label>
+              <Input id="eDrive" value={editDrive} onChange={e => setEditDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsEditRouteOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={editSubmitting} className="gap-2">
+                {editSubmitting && <Loader2 size={13} className="animate-spin" />}
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Draft Mail dialog */}
+      <Dialog open={isDraftMailOpen} onOpenChange={open => { setIsDraftMailOpen(open); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PenLine size={15} className="text-primary" />
+              Draft Mail
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Subject */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dSubject">Subject</Label>
+              <Input
+                id="dSubject"
+                placeholder="e.g. Your trip confirmation — KCL Dudhsagar"
+                value={draftSubject}
+                onChange={e => setDraftSubject(e.target.value)}
+              />
+            </div>
+
+            {/* Body */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dBody">Message</Label>
+              <Textarea
+                id="dBody"
+                placeholder={"Dear {name},\n\nYour booking is confirmed for the Konkan Coastal Link trip.\n\nWarm regards,\nMSTS Team"}
+                className="min-h-48 font-mono text-sm resize-y"
+                value={draftBody}
+                onChange={e => setDraftBody(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Plain text — line breaks are preserved in the email.</p>
+            </div>
+
+            {/* Recipients */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5">
+                  <Users size={12} className="text-muted-foreground" />
+                  Recipients ({draftRecipients.size} selected)
+                </Label>
+                <div className="flex gap-2 text-xs">
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    onClick={() => setDraftRecipients(new Set(buyers.filter(b => b.email).map(b => b.id)))}
+                  >Select all</button>
+                  <span className="text-muted-foreground">·</span>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:underline"
+                    onClick={() => setDraftRecipients(new Set())}
+                  >Clear</button>
+                </div>
+              </div>
+              <div className="border border-border rounded-xl divide-y divide-border max-h-48 overflow-y-auto">
+                {buyers.filter(b => b.email).length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-6">No buyers with email addresses yet.</p>
+                ) : (
+                  buyers.filter(b => b.email).map(b => (
+                    <label key={b.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors">
+                      <Checkbox
+                        checked={draftRecipients.has(b.id)}
+                        onCheckedChange={checked => setDraftRecipients(prev => {
+                          const next = new Set(prev);
+                          checked ? next.add(b.id) : next.delete(b.id);
+                          return next;
+                        })}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{b.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{b.email}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs font-mono shrink-0">
+                        {route.versions.find(v => v.id === b.routeVersionId)?.label || '—'}
+                      </Badge>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1 border-t">
+              <Button variant="outline" onClick={() => setIsDraftMailOpen(false)}>Cancel</Button>
+              <Button
+                className="gap-2"
+                onClick={handleSendDraft}
+                disabled={sendingDraft || !draftSubject.trim() || !draftBody.trim() || draftRecipients.size === 0}
+              >
+                {sendingDraft ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                Send to {draftRecipients.size} buyer{draftRecipients.size !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
