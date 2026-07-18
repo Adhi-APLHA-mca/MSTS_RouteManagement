@@ -44,6 +44,7 @@ export function RouteDetail() {
   const [bVersion, setBVersion] = useState(route?.versions[0]?.id || '');
   const [bFare, setBFare] = useState(route?.defaultFare ? String(route.defaultFare) : '');
   const [bStatus, setBStatus] = useState<'active' | 'inactive'>('active');
+  const [bJoinDate, setBJoinDate] = useState(new Date().toISOString().split('T')[0]);
 
   // CSV import
   const fileInputRef = useRef<HTMLInputElement>(null);

@@ -24,6 +24,10 @@ args = "API Server"
 task = "workflow.run"
 args = "Dashboard"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+waitForPort = 3000
+
 [[workflows.workflow]]
 name = "API Server"
 author = "agent"

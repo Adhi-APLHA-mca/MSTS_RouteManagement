@@ -10,9 +10,10 @@ router.get('/routes/:routeId/buyers', async (req, res) => {
     const snap = await db
       .collection('buyers')
       .where('routeId', '==', routeId)
-      .orderBy('createdAt', 'desc')
       .get();
-    const buyers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const buyers = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() as Record<string, any> }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json(buyers);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch buyers', detail: err.message });
@@ -23,7 +24,7 @@ router.get('/routes/:routeId/buyers', async (req, res) => {
 router.post('/routes/:routeId/buyers', async (req, res) => {
   try {
     const { routeId } = req.params;
-    const { name, email, phone, address, fareAmount, routeVersionId, status, notes } = req.body;
+    const { name, email, phone, address, fareAmount, routeVersionId, status, notes, joinDate } = req.body;
     const now = new Date().toISOString();
 
     const buyerData = {
@@ -35,7 +36,7 @@ router.post('/routes/:routeId/buyers', async (req, res) => {
       address: address || '',
       fareAmount: Number(fareAmount) || 0,
       status: status || 'active',
-      joinDate: now.split('T')[0],
+      joinDate: joinDate || now.split('T')[0],
       notes: notes || '',
       emailSent: false,
       emailSentAt: null,
