@@ -30,6 +30,7 @@ export function Routes() {
   // Form state
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [defaultFare, setDefaultFare] = useState('');
   const [versionLabel, setVersionLabel] = useState('v1');
   const [versionDesc, setVersionDesc] = useState('Default version');
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
@@ -48,6 +49,7 @@ export function Routes() {
       await addRoute({
         name,
         code,
+        defaultFare: defaultFare ? Number(defaultFare) : undefined,
         whatsappGroupLink: whatsappGroupLink || undefined,
         driveFolderLink: driveFolderLink || undefined,
         versionLabel,
@@ -55,7 +57,7 @@ export function Routes() {
       });
       toast({ title: 'Route created', description: `${name} has been added.` });
       setIsAddModalOpen(false);
-      setName(''); setCode(''); setVersionLabel('v1'); setVersionDesc('Default version');
+      setName(''); setCode(''); setDefaultFare(''); setVersionLabel('v1'); setVersionDesc('Default version');
       setWhatsappGroupLink(''); setDriveFolderLink('');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -111,6 +113,21 @@ export function Routes() {
                   <Label htmlFor="code" className="text-sm font-medium">Route Code</Label>
                   <Input id="code" placeholder="e.g. AD-01" value={code} onChange={e => setCode(e.target.value)} required className="font-mono" />
                 </div>
+              </div>
+
+              {/* Default fare */}
+              <div className="space-y-1.5">
+                <Label htmlFor="defaultFare" className="text-sm font-medium">
+                  Default Fare (₹) <span className="text-muted-foreground font-normal text-xs">(pre-fills when adding buyers)</span>
+                </Label>
+                <Input
+                  id="defaultFare"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 1200"
+                  value={defaultFare}
+                  onChange={e => setDefaultFare(e.target.value)}
+                />
               </div>
 
               {/* Resource links */}

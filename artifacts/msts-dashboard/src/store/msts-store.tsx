@@ -22,6 +22,7 @@ export interface Route {
   id: string;
   name: string;
   code: string;
+  defaultFare?: number | null;
   whatsappGroupLink?: string | null;
   driveFolderLink?: string | null;
   versions: RouteVersion[];

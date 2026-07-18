@@ -19,6 +19,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export interface CreateRoutePayload {
   name: string;
   code: string;
+  defaultFare?: number;
   whatsappGroupLink?: string;
   driveFolderLink?: string;
   versionLabel?: string;

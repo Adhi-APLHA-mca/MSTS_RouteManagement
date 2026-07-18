@@ -42,7 +42,7 @@ export function RouteDetail() {
   const [bPhone, setBPhone] = useState('');
   const [bAddress, setBAddress] = useState('');
   const [bVersion, setBVersion] = useState(route?.versions[0]?.id || '');
-  const [bFare, setBFare] = useState('');
+  const [bFare, setBFare] = useState(route?.defaultFare ? String(route.defaultFare) : '');
   const [bStatus, setBStatus] = useState<'active' | 'inactive'>('active');
 
   // CSV import

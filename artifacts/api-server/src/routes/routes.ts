@@ -17,12 +17,13 @@ router.get('/', async (_req, res) => {
 // POST /api/routes
 router.post('/', async (req, res) => {
   try {
-    const { name, code, whatsappGroupLink, driveFolderLink, versionLabel, versionDesc } = req.body;
+    const { name, code, defaultFare, whatsappGroupLink, driveFolderLink, versionLabel, versionDesc } = req.body;
     const now = new Date().toISOString();
 
     const routeData = {
       name,
       code,
+      defaultFare: defaultFare != null ? Number(defaultFare) : null,
       whatsappGroupLink: whatsappGroupLink || null,
       driveFolderLink: driveFolderLink || null,
       versions: [
