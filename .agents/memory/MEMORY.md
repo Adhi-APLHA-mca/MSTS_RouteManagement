@@ -1,2 +1,2 @@
-- [Firebase env var quotes](firebase-env-quotes.md) — FIREBASE_PROJECT_ID and FIREBASE_CLIENT_EMAIL were saved with surrounding quotes; all Firebase env vars need stripQuotes() before use.
+- [Env var quotes](env-var-quotes.md) — Secrets entered via requestSecrets form are saved with surrounding double-quotes; strip them before use in all API clients (Firebase, Groq, etc.).
 - [Firebase credential init](firebase-credential-init.md) — Use applicationDefault() via temp JSON file (not cert()) to avoid Node 24 OpenSSL key-parsing issues.

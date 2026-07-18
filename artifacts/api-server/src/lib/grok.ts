@@ -2,13 +2,17 @@ import OpenAI from 'openai';
 
 let _grok: OpenAI | null = null;
 
+function stripQuotes(val: string): string {
+  return val.replace(/^["']|["']$/g, '');
+}
+
 function getGrokClient(): OpenAI {
   if (!_grok) {
     if (!process.env.GROK_API_KEY) {
       throw new Error('GROK_API_KEY environment variable is not set');
     }
     _grok = new OpenAI({
-      apiKey: process.env.GROK_API_KEY,
+      apiKey: stripQuotes(process.env.GROK_API_KEY),
       baseURL: 'https://api.groq.com/openai/v1',
     });
   }
