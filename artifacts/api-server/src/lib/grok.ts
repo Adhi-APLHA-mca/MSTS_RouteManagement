@@ -1,9 +1,19 @@
 import OpenAI from 'openai';
 
-const grok = new OpenAI({
-  apiKey: process.env.GROK_API_KEY,
-  baseURL: 'https://api.x.ai/v1',
-});
+let _grok: OpenAI | null = null;
+
+function getGrokClient(): OpenAI {
+  if (!_grok) {
+    if (!process.env.GROK_API_KEY) {
+      throw new Error('GROK_API_KEY environment variable is not set');
+    }
+    _grok = new OpenAI({
+      apiKey: process.env.GROK_API_KEY,
+      baseURL: 'https://api.x.ai/v1',
+    });
+  }
+  return _grok;
+}
 
 export interface WelcomeEmailParams {
   routeName: string;
@@ -47,7 +57,7 @@ ${driveFolderLink ? '- Mention the shared Google Drive folder and include the li
 - Keep it 3–4 short paragraphs
 - Close with "MSTS Operations Team"`;
 
-  const resp = await grok.chat.completions.create({
+  const resp = await getGrokClient().chat.completions.create({
     model: 'grok-3-mini',
     messages: [
       { role: 'system', content: systemPrompt },

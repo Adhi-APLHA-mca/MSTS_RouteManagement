@@ -1,15 +1,34 @@
-# [Project name]
+# MSTS Client Dashboard
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A route and buyer management dashboard for MSTS operations — tracks transport routes, manages buyer assignments, and sends welcome emails via Gmail/Grok AI.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+Two workflows run the app (both configured in Replit):
+
+- **Dashboard** — `PORT=3000 BASE_PATH=/ pnpm --filter @workspace/msts-dashboard run dev` (port 3000, webview)
+- **API Server** — `PORT=8080 pnpm --filter @workspace/api-server run dev` (port 8080, console)
+
+The Vite dev server proxies `/api` → `localhost:8080`, so both services work from one preview URL.
+
+Other useful commands:
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+
+## Required secrets / env vars
+
+| Key | Where to get it | Notes |
+|-----|-----------------|-------|
+| `FIREBASE_CLIENT_EMAIL` | Firebase Console → Project Settings → Service Accounts | Service account email |
+| `FIREBASE_PRIVATE_KEY` | Same service account JSON | Include `-----BEGIN PRIVATE KEY-----` header |
+| `SMTP_USER` | Gmail address | Same as `SMTP_FROM` (teamtscr.aba@gmail.com) |
+| `SMTP_PASS` | Gmail App Password | Requires 2FA enabled on the account |
+| `GROK_API_KEY` | [x.ai console](https://console.x.ai) | Used for AI-generated welcome emails only; app starts without it |
+| `DATABASE_URL` | Auto-provisioned by Replit | Postgres connection string — do not set manually |
+
+Non-secret env vars already set in `.replit` (`FIREBASE_PROJECT_ID`, `FIREBASE_AUTH_DOMAIN`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`).
 
 ## Stack
 
