@@ -69,6 +69,9 @@ export const apiBuyers = {
 // ── Models ───────────────────────────────────────────────────────────────────
 
 export const apiModels = {
+  listAll: () =>
+    req<any[]>(`/models`),
+
   list: (routeId: string) =>
     req<any[]>(`/routes/${routeId}/models`),
 

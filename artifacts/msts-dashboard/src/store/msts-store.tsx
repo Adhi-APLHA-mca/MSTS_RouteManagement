@@ -103,7 +103,7 @@ interface MstsContextValue {
   // Model actions (scoped to a routeId)
   models: RouteModel[];
   modelsLoading: boolean;
-  loadModels: (routeId: string) => Promise<void>;
+  loadModels: () => Promise<void>;
   addModel: (routeId: string, data: Record<string, any>) => Promise<RouteModel>;
   deleteModel: (modelId: string) => Promise<void>;
   addModelTask: (modelId: string, title: string) => Promise<ModelTask>;
@@ -235,10 +235,10 @@ export function MstsProvider({ children }: { children: ReactNode }) {
 
   // ── Model mutations ──────────────────────────────────────────────────────────
 
-  const loadModels = useCallback(async (routeId: string) => {
+  const loadModels = useCallback(async (_routeId?: string) => {
     try {
       setModelsLoading(true);
-      const data = await apiModels.list(routeId);
+      const data = await apiModels.listAll();
       setModels(data);
     } catch (err: any) {
       setError(err.message);

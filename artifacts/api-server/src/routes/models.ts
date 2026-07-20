@@ -3,6 +3,19 @@ import { db } from '../lib/firebase.js';
 
 const router = Router();
 
+// GET /api/models  — all models across all routes
+router.get('/models', async (_req, res) => {
+  try {
+    const snap = await db.collection('models').get();
+    const models = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a: any, b: any) => (b.createdAt > a.createdAt ? 1 : -1));
+    res.json(models);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/routes/:routeId/models
 router.get('/routes/:routeId/models', async (req, res) => {
   try {

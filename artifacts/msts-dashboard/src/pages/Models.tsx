@@ -315,7 +315,6 @@ export function Models() {
   const { routes, models, modelsLoading, loadModels, addModel } = useMsts();
   const { toast } = useToast();
 
-  const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -327,23 +326,16 @@ export function Models() {
   const [mOwner, setMOwner] = useState('');
   const [mRoute, setMRoute] = useState('');
 
-  // load models when a route is selected (or on first load pick first route)
   useEffect(() => {
-    if (routes.length && !selectedRouteId) {
-      setSelectedRouteId(routes[0].id);
-    }
-  }, [routes, selectedRouteId]);
-
-  useEffect(() => {
-    if (selectedRouteId) loadModels(selectedRouteId);
-  }, [selectedRouteId, loadModels]);
+    loadModels();
+  }, [loadModels]);
 
   const resetForm = () => {
     setMName(''); setMProd(''); setMTotal(''); setMAdvance(''); setMOwner(''); setMRoute('');
   };
 
   const openCreate = () => {
-    setMRoute(selectedRouteId || routes[0]?.id || '');
+    setMRoute(routes[0]?.id || '');
     setIsCreateOpen(true);
   };
 
@@ -359,8 +351,6 @@ export function Models() {
         advance: mAdvance ? Number(mAdvance) : 0,
         ownerName: mOwner,
       });
-      // if the model was created for a different route, switch to it
-      if (mRoute !== selectedRouteId) setSelectedRouteId(mRoute);
       toast({ title: 'Model created', description: `${mName} added.` });
       setIsCreateOpen(false);
       resetForm();
@@ -412,28 +402,6 @@ export function Models() {
               <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Route filter */}
-      {routes.length > 0 && (
-        <div className="flex items-center gap-3 mb-5">
-          <span className="text-xs text-muted-foreground font-medium">Route:</span>
-          <div className="flex gap-2 flex-wrap">
-            {routes.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setSelectedRouteId(r.id)}
-                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                  selectedRouteId === r.id
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
-                }`}
-              >
-                {r.code}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
