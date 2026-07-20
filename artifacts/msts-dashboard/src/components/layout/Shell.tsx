@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Route as RouteIcon, Train } from "lucide-react";
+import { Route as RouteIcon, Train, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -8,6 +8,7 @@ export function Sidebar() {
 
   const navItems = [
     { label: "Routes", href: "/routes", icon: RouteIcon },
+    { label: "Models", href: "/models", icon: Package },
   ];
 
   return (

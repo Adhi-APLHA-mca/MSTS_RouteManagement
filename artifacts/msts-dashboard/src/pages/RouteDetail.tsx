@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMsts, Buyer } from '@/store/msts-store';
-import { ModelSection } from '@/components/ModelSection';
 import { useParams, Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,18 +22,15 @@ import Papa from 'papaparse';
 
 export function RouteDetail() {
   const { routeId } = useParams();
-  const { routes, buyers, buyersLoading, loadBuyers, addBuyer, addBuyers, updateBuyerStatus, deleteBuyer, previewEmail, sendEmails, updateRoute, draftMail, loadModels } = useMsts();
+  const { routes, buyers, buyersLoading, loadBuyers, addBuyer, addBuyers, updateBuyerStatus, deleteBuyer, previewEmail, sendEmails, updateRoute, draftMail } = useMsts();
   const { toast } = useToast();
 
   const route = routes.find(r => r.id === routeId);
 
-  // Load buyers + models for this route on mount
+  // Load buyers for this route on mount
   useEffect(() => {
-    if (routeId) {
-      loadBuyers(routeId);
-      loadModels(routeId);
-    }
-  }, [routeId, loadBuyers, loadModels]);
+    if (routeId) loadBuyers(routeId);
+  }, [routeId, loadBuyers]);
 
   const [search, setSearch] = useState('');
   const [isAddBuyerOpen, setIsAddBuyerOpen] = useState(false);
@@ -959,9 +955,6 @@ export function RouteDetail() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Models section */}
-      {routeId && <ModelSection routeId={routeId} />}
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
