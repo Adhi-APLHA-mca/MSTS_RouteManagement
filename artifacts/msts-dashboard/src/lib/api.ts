@@ -75,8 +75,8 @@ export const apiModels = {
   list: (routeId: string) =>
     req<any[]>(`/routes/${routeId}/models`),
 
-  create: (routeId: string, data: Record<string, any>) =>
-    req<any>(`/routes/${routeId}/models`, { method: 'POST', body: JSON.stringify(data) }),
+  create: (_routeId: string, data: Record<string, any>) =>
+    req<any>(`/models`, { method: 'POST', body: JSON.stringify(data) }),
 
   update: (modelId: string, data: Record<string, any>) =>
     req<any>(`/models/${modelId}`, { method: 'PATCH', body: JSON.stringify(data) }),

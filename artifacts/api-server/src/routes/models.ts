@@ -33,6 +33,37 @@ router.get('/routes/:routeId/models', async (req, res) => {
   }
 });
 
+// POST /api/models  — create without a routeId
+router.post('/models', async (req, res) => {
+  try {
+    const routeId = '';
+    const { name, productionName, totalAmount, advance, ownerName } = req.body;
+    const now = new Date().toISOString();
+
+    const advancePayments =
+      advance && Number(advance) > 0
+        ? [{ id: `ap_${Date.now()}`, amount: Number(advance), date: now, note: 'Initial advance' }]
+        : [];
+
+    const data = {
+      routeId,
+      name,
+      productionName: productionName || '',
+      totalAmount: Number(totalAmount) || 0,
+      ownerName: ownerName || '',
+      advancePayments,
+      tasks: [],
+      status: 'in_progress',
+      createdAt: now,
+    };
+
+    const ref = await db.collection('models').add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/routes/:routeId/models
 router.post('/routes/:routeId/models', async (req, res) => {
   try {
