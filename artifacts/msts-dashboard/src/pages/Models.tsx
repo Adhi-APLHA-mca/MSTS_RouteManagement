@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Plus, ChevronDown, ChevronUp, Trash2, Loader2, Package,
@@ -324,27 +324,24 @@ export function Models() {
   const [mTotal, setMTotal] = useState('');
   const [mAdvance, setMAdvance] = useState('');
   const [mOwner, setMOwner] = useState('');
-  const [mRoute, setMRoute] = useState('');
-
   useEffect(() => {
     loadModels();
   }, [loadModels]);
 
   const resetForm = () => {
-    setMName(''); setMProd(''); setMTotal(''); setMAdvance(''); setMOwner(''); setMRoute('');
+    setMName(''); setMProd(''); setMTotal(''); setMAdvance(''); setMOwner('');
   };
 
   const openCreate = () => {
-    setMRoute(routes[0]?.id || '');
     setIsCreateOpen(true);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mName || !mTotal || !mRoute) return;
+    if (!mName || !mTotal) return;
     try {
       setSubmitting(true);
-      await addModel(mRoute, {
+      await addModel('', {
         name: mName,
         productionName: mProd,
         totalAmount: Number(mTotal),
@@ -437,17 +434,6 @@ export function Models() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label>Route <span className="text-destructive">*</span></Label>
-              <Select value={mRoute} onValueChange={setMRoute}>
-                <SelectTrigger><SelectValue placeholder="Select route" /></SelectTrigger>
-                <SelectContent>
-                  {routes.map(r => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="mName">Model Name <span className="text-destructive">*</span></Label>
               <Input id="mName" placeholder="e.g. Konkan Heritage Train Set" value={mName} onChange={e => setMName(e.target.value)} required />
