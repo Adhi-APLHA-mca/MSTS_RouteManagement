@@ -66,6 +66,31 @@ export const apiBuyers = {
     req<{ success: boolean }>(`/buyers/${id}`, { method: 'DELETE' }),
 };
 
+// ── Models ───────────────────────────────────────────────────────────────────
+
+export const apiModels = {
+  list: (routeId: string) =>
+    req<any[]>(`/routes/${routeId}/models`),
+
+  create: (routeId: string, data: Record<string, any>) =>
+    req<any>(`/routes/${routeId}/models`, { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (modelId: string, data: Record<string, any>) =>
+    req<any>(`/models/${modelId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  delete: (modelId: string) =>
+    req<{ success: boolean }>(`/models/${modelId}`, { method: 'DELETE' }),
+
+  addAdvance: (modelId: string, amount: number, note?: string) =>
+    req<any>(`/models/${modelId}/advance`, { method: 'POST', body: JSON.stringify({ amount, note }) }),
+
+  addTask: (modelId: string, title: string) =>
+    req<any>(`/models/${modelId}/tasks`, { method: 'POST', body: JSON.stringify({ title }) }),
+
+  toggleTask: (modelId: string, taskId: string, done: boolean) =>
+    req<any>(`/models/${modelId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ done }) }),
+};
+
 // ── Email ────────────────────────────────────────────────────────────────────
 
 export const apiEmail = {

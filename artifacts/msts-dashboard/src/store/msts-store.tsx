@@ -6,7 +6,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { apiRoutes, apiBuyers, apiEmail, type CreateRoutePayload } from '@/lib/api';
+import { apiRoutes, apiBuyers, apiEmail, apiModels, type CreateRoutePayload } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,33 @@ export interface Buyer {
   createdAt?: string;
 }
 
+export interface AdvancePayment {
+  id: string;
+  amount: number;
+  date: string;
+  note?: string;
+}
+
+export interface ModelTask {
+  id: string;
+  title: string;
+  done: boolean;
+  createdAt: string;
+}
+
+export interface RouteModel {
+  id: string;
+  routeId: string;
+  name: string;
+  productionName: string;
+  totalAmount: number;
+  ownerName: string;
+  advancePayments: AdvancePayment[];
+  tasks: ModelTask[];
+  status: 'in_progress' | 'delivered';
+  createdAt: string;
+}
+
 // ── Context ───────────────────────────────────────────────────────────────────
 
 interface MstsContextValue {
@@ -72,6 +99,16 @@ interface MstsContextValue {
   previewEmail: (routeId: string, buyerId: string) => Promise<{ subject: string; html: string }>;
   sendEmails: (routeId: string, buyerIds: string[]) => Promise<{ buyerId: string; status: string; error?: string }[]>;
   draftMail: (routeId: string, buyerIds: string[], subject: string, body: string) => Promise<{ buyerId: string; status: string; error?: string }[]>;
+
+  // Model actions (scoped to a routeId)
+  models: RouteModel[];
+  modelsLoading: boolean;
+  loadModels: (routeId: string) => Promise<void>;
+  addModel: (routeId: string, data: Record<string, any>) => Promise<RouteModel>;
+  deleteModel: (modelId: string) => Promise<void>;
+  addModelTask: (modelId: string, title: string) => Promise<ModelTask>;
+  toggleModelTask: (modelId: string, taskId: string, done: boolean) => Promise<void>;
+  addModelAdvance: (modelId: string, amount: number, note?: string) => Promise<AdvancePayment>;
 }
 
 const MstsContext = createContext<MstsContextValue | null>(null);
@@ -81,8 +118,10 @@ const MstsContext = createContext<MstsContextValue | null>(null);
 export function MstsProvider({ children }: { children: ReactNode }) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [models, setModels] = useState<RouteModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [buyersLoading, setBuyersLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshRoutes = useCallback(async () => {
@@ -194,6 +233,59 @@ export function MstsProvider({ children }: { children: ReactNode }) {
     return results;
   }, []);
 
+  // ── Model mutations ──────────────────────────────────────────────────────────
+
+  const loadModels = useCallback(async (routeId: string) => {
+    try {
+      setModelsLoading(true);
+      const data = await apiModels.list(routeId);
+      setModels(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
+  const addModel = useCallback(async (routeId: string, data: Record<string, any>): Promise<RouteModel> => {
+    const created = await apiModels.create(routeId, data);
+    setModels(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const deleteModel = useCallback(async (modelId: string) => {
+    await apiModels.delete(modelId);
+    setModels(prev => prev.filter(m => m.id !== modelId));
+  }, []);
+
+  const addModelTask = useCallback(async (modelId: string, title: string): Promise<ModelTask> => {
+    const task = await apiModels.addTask(modelId, title);
+    // Re-fetch to get updated status
+    setModels(prev => prev.map(m => m.id === modelId
+      ? { ...m, tasks: [...m.tasks, task] }
+      : m,
+    ));
+    return task;
+  }, []);
+
+  const toggleModelTask = useCallback(async (modelId: string, taskId: string, done: boolean) => {
+    const result = await apiModels.toggleTask(modelId, taskId, done);
+    setModels(prev => prev.map(m => {
+      if (m.id !== modelId) return m;
+      const tasks = m.tasks.map(t => t.id === taskId ? { ...t, done } : t);
+      return { ...m, tasks, status: result.status };
+    }));
+  }, []);
+
+  const addModelAdvance = useCallback(async (modelId: string, amount: number, note?: string): Promise<AdvancePayment> => {
+    const payment = await apiModels.addAdvance(modelId, amount, note);
+    setModels(prev => prev.map(m => m.id === modelId
+      ? { ...m, advancePayments: [...(m.advancePayments || []), payment] }
+      : m,
+    ));
+    return payment;
+  }, []);
+
   return (
     <MstsContext.Provider
       value={{
@@ -214,6 +306,14 @@ export function MstsProvider({ children }: { children: ReactNode }) {
         previewEmail,
         sendEmails,
         draftMail,
+        models,
+        modelsLoading,
+        loadModels,
+        addModel,
+        deleteModel,
+        addModelTask,
+        toggleModelTask,
+        addModelAdvance,
       }}
     >
       {children}
