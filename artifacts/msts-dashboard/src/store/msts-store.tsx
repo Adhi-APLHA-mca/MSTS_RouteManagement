@@ -97,7 +97,7 @@ interface MstsContextValue {
 
   // Email agent
   previewEmail: (routeId: string, buyerId: string) => Promise<{ subject: string; html: string }>;
-  sendEmails: (routeId: string, buyerIds: string[]) => Promise<{ buyerId: string; status: string; error?: string }[]>;
+  sendEmails: (routeId: string, buyerIds: string[], subject?: string, body?: string) => Promise<{ buyerId: string; status: string; error?: string }[]>;
   draftMail: (routeId: string, buyerIds: string[], subject: string, body: string) => Promise<{ buyerId: string; status: string; error?: string }[]>;
 
   // Model actions (scoped to a routeId)
@@ -214,8 +214,8 @@ export function MstsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const sendEmails = useCallback(async (routeId: string, buyerIds: string[]) => {
-    const { results } = await apiEmail.send(routeId, buyerIds);
+  const sendEmails = useCallback(async (routeId: string, buyerIds: string[], subject?: string, body?: string) => {
+    const { results } = await apiEmail.send(routeId, buyerIds, subject, body);
     results
       .filter(r => r.status === 'sent')
       .forEach(r => {

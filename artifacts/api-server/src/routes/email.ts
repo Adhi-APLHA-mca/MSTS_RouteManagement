@@ -42,9 +42,11 @@ router.post('/preview', async (req, res) => {
 // POST /api/email/send  — generate + send + share Drive + mark emailSent
 router.post('/send', async (req, res) => {
   try {
-    const { routeId, buyerIds } = req.body as {
+    const { routeId, buyerIds, subject: customSubject, body: customBody } = req.body as {
       routeId: string;
       buyerIds: string[];
+      subject?: string;
+      body?: string;
     };
 
     const routeDoc = await db.collection('routes').doc(routeId).get();
@@ -68,14 +70,28 @@ router.post('/send', async (req, res) => {
           continue;
         }
 
-        // 1. Generate email via Grok
-        const { subject, html } = await generateWelcomeEmail({
-          routeName: route.name,
-          routeCode: route.code,
-          buyerName: buyer.name,
-          whatsappGroupLink: route.whatsappGroupLink,
-          driveFolderLink: route.driveFolderLink,
-        });
+        // 1. Generate the welcome email unless the sender edited it in the preview.
+        let subject: string;
+        let html: string;
+        if (customSubject && customBody) {
+          subject = customSubject;
+          const htmlBody = customBody
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+          html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1a1a1a;line-height:1.6">${htmlBody}</body></html>`;
+        } else {
+          const generated = await generateWelcomeEmail({
+            routeName: route.name,
+            routeCode: route.code,
+            buyerName: buyer.name,
+            whatsappGroupLink: route.whatsappGroupLink,
+            driveFolderLink: route.driveFolderLink,
+          });
+          subject = generated.subject;
+          html = generated.html;
+        }
 
         // 2. Send via SMTP
         await transporter.sendMail({

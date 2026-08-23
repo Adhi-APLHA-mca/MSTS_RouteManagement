@@ -55,6 +55,7 @@ export function RouteDetail() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [sendEmailFlags, setSendEmailFlags] = useState<Record<number, boolean>>({});   // index → send?
   const [existingRowIndices, setExistingRowIndices] = useState<Record<number, boolean>>({});  // index → already in system?
+  const [importedBuyerIds, setImportedBuyerIds] = useState<string[]>([]);
 
   // Email preview
   const [emailPreview, setEmailPreview] = useState<{ subject: string; html: string } | null>(null);
@@ -77,6 +78,8 @@ export function RouteDetail() {
   const [draftBody, setDraftBody] = useState('');
   const [draftRecipients, setDraftRecipients] = useState<Set<string>>(new Set());
   const [sendingDraft, setSendingDraft] = useState(false);
+  const [emailEditSubject, setEmailEditSubject] = useState('');
+  const [emailEditBody, setEmailEditBody] = useState('');
 
   // ── Open edit dialog pre-filled ──────────────────────────────────────────────
   const openEditRoute = () => {
@@ -116,6 +119,11 @@ export function RouteDetail() {
     setIsDraftMailOpen(true);
   };
 
+  const openDraftMailFor = (buyerIds: string[]) => {
+    setDraftRecipients(new Set(buyerIds));
+    setIsDraftMailOpen(true);
+  };
+
   const handleSendDraft = async () => {
     if (!route || !draftSubject.trim() || !draftBody.trim() || draftRecipients.size === 0) return;
     try {
@@ -130,6 +138,7 @@ export function RouteDetail() {
       setIsDraftMailOpen(false);
       setDraftSubject('');
       setDraftBody('');
+      setImportedBuyerIds([]);
     } catch (err: any) {
       toast({ title: 'Send failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -254,26 +263,8 @@ export function RouteDetail() {
 
       const created = await addBuyers(route.id, newBuyersData);
 
-      // Send emails only to newly created buyers whose checkbox is checked
-      const toEmail = created.filter((_, idx) => {
-        const origIndex = newRows[idx].i;
-        return sendEmailFlags[origIndex] && newBuyersData[idx].email;
-      });
-
-      if (toEmail.length > 0) {
-        toast({ title: 'Sending welcome emails…', description: `Sending to ${toEmail.length} buyer${toEmail.length > 1 ? 's' : ''}` });
-        try {
-          const results = await sendEmails(route.id, toEmail.map(b => b.id));
-          const sent = results.filter(r => r.status === 'sent').length;
-          const failed = results.filter(r => r.status === 'failed').length;
-          toast({
-            title: 'Emails sent',
-            description: `${sent} sent${failed > 0 ? `, ${failed} failed` : ''}.`,
-          });
-        } catch {
-          toast({ title: 'Some emails failed', description: 'Buyers were imported but emails could not be sent.', variant: 'destructive' });
-        }
-      }
+      // Import only. Email sending is a separate, explicit action after import.
+      setImportedBuyerIds(created.filter(b => b.email).map(b => b.id));
 
       toast({
         title: 'Import complete',
@@ -282,6 +273,7 @@ export function RouteDetail() {
       setIsImportOpen(false);
       setParsedRows([]);
       setExistingRowIndices({});
+      setSendEmailFlags({});
     } catch (err: any) {
       toast({ title: 'Import failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -319,6 +311,8 @@ export function RouteDetail() {
       setPreviewBuyerId(buyerId);
       const preview = await previewEmail(routeId, buyerId);
       setEmailPreview(preview);
+      setEmailEditSubject(preview.subject);
+      setEmailEditBody(preview.html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''));
     } catch (err: any) {
       toast({ title: 'Preview failed', description: err.message, variant: 'destructive' });
       setPreviewBuyerId(null);
@@ -331,7 +325,7 @@ export function RouteDetail() {
     if (!routeId) return;
     try {
       setSendingEmails(prev => [...prev, buyerId]);
-      const results = await sendEmails(routeId, [buyerId]);
+      const results = await sendEmails(routeId, [buyerId], emailEditSubject, emailEditBody);
       const result = results[0];
       if (result?.status === 'sent') {
         toast({ title: 'Email sent!', description: 'Welcome email delivered successfully.' });
@@ -344,6 +338,8 @@ export function RouteDetail() {
       setSendingEmails(prev => prev.filter(id => id !== buyerId));
       setEmailPreview(null);
       setPreviewBuyerId(null);
+      setEmailEditSubject('');
+      setEmailEditBody('');
     }
   };
 
@@ -591,51 +587,23 @@ export function RouteDetail() {
                       <Table>
                         <TableHeader className="bg-muted/50 sticky top-0 z-10">
                           <TableRow>
-                            <TableHead className="text-xs w-8">
-                              <Checkbox
-                                checked={parsedRows.filter((_, i) => !existingRowIndices[i]).every((_, __, arr) => arr.length > 0) &&
-                                  parsedRows.every((_, i) => existingRowIndices[i] || sendEmailFlags[i])}
-                                onCheckedChange={checked => {
-                                  const flags: Record<number, boolean> = { ...sendEmailFlags };
-                                  parsedRows.forEach((_, i) => { if (!existingRowIndices[i]) flags[i] = !!checked; });
-                                  setSendEmailFlags(flags);
-                                }}
-                              />
-                            </TableHead>
                             <TableHead className="text-xs">#</TableHead>
                             <TableHead className="text-xs">Name</TableHead>
                             <TableHead className="text-xs">Email</TableHead>
                             <TableHead className="text-xs">Phone</TableHead>
                             <TableHead className="text-xs">Fare</TableHead>
-                            <TableHead className="text-xs">
-                              <span className="flex items-center gap-1"><Mail size={11} /> Send email?</span>
-                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {parsedRows.map((row, i) => {
                             const isExisting = existingRowIndices[i];
                             return (
-                              <TableRow key={i} className={isExisting ? 'opacity-40 bg-muted/30' : sendEmailFlags[i] ? '' : 'opacity-50'}>
-                                <TableCell className="py-2">
-                                  <Checkbox
-                                    checked={!isExisting && !!sendEmailFlags[i]}
-                                    disabled={isExisting}
-                                    onCheckedChange={checked => !isExisting && setSendEmailFlags(prev => ({ ...prev, [i]: !!checked }))}
-                                  />
-                                </TableCell>
+                              <TableRow key={i} className={isExisting ? 'opacity-40 bg-muted/30' : ''}>
                                 <TableCell className="text-xs py-2 text-muted-foreground">{i + 1}</TableCell>
                                 <TableCell className="text-xs py-2 font-medium">{row.Name || row.name}</TableCell>
                                 <TableCell className="text-xs py-2 text-muted-foreground">{row.Email || row.email || '—'}</TableCell>
                                 <TableCell className="text-xs py-2 text-muted-foreground">{row.Phone || row.phone}</TableCell>
                                 <TableCell className="text-xs py-2">₹{row.Fare || row.fare}</TableCell>
-                                <TableCell className="text-xs py-2">
-                                  {isExisting
-                                    ? <span className="text-amber-600 font-medium text-xs">Already added</span>
-                                    : sendEmailFlags[i]
-                                      ? <span className="text-emerald-600 font-medium">✓ Send</span>
-                                      : <span className="text-muted-foreground">Skip</span>}
-                                </TableCell>
                               </TableRow>
                             );
                           })}
@@ -645,8 +613,8 @@ export function RouteDetail() {
                     </div>
 
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Mail size={11} />
-                      Checked rows will receive a Grok-generated welcome email after import (only if they have an email address).
+                      <CheckCircle2 size={11} />
+                      Import saves buyers only. You can send mail separately after the import is complete.
                     </p>
 
                     <Button className="w-full gap-2" onClick={confirmImport} disabled={submitting}>
@@ -675,6 +643,18 @@ export function RouteDetail() {
           </div>
         </motion.button>
       </div>
+
+      {importedBuyerIds.length > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            <CheckCircle2 size={15} className="text-emerald-600" />
+            <span><strong>{importedBuyerIds.length}</strong> imported buyer{importedBuyerIds.length !== 1 ? 's' : ''} ready for email.</span>
+          </div>
+          <Button size="sm" className="gap-2" onClick={() => openDraftMailFor(importedBuyerIds)}>
+            <Mail size={13} /> Send Mail
+          </Button>
+        </div>
+      )}
 
       {/* Buyers Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -986,14 +966,15 @@ export function RouteDetail() {
           </DialogHeader>
           {emailPreview && (
             <div className="space-y-4">
-              <div className="bg-muted/40 rounded-lg px-4 py-2.5 text-sm">
-                <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Subject: </span>
-                <span className="font-medium">{emailPreview.subject}</span>
+              <div className="space-y-1.5">
+                <Label htmlFor="welcomeSubject">Subject</Label>
+                <Input id="welcomeSubject" value={emailEditSubject} onChange={e => setEmailEditSubject(e.target.value)} />
               </div>
-              <div
-                className="border border-border rounded-xl p-5 text-sm leading-relaxed max-h-80 overflow-y-auto prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: emailPreview.html }}
-              />
+              <div className="space-y-1.5">
+                <Label htmlFor="welcomeBody">Message</Label>
+                <Textarea id="welcomeBody" value={emailEditBody} onChange={e => setEmailEditBody(e.target.value)} className="min-h-48 font-mono text-sm resize-y" />
+                <p className="text-xs text-muted-foreground">Edit the subject or message before sending. Line breaks are preserved.</p>
+              </div>
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 {route.driveFolderLink
                   ? <>Sending will also share the Drive folder with the buyer's email via Google Drive API.</>
@@ -1006,7 +987,7 @@ export function RouteDetail() {
                 <Button
                   className="gap-2"
                   onClick={() => previewBuyerId && handleSendEmail(previewBuyerId)}
-                  disabled={sendingEmails.includes(previewBuyerId || '')}
+                  disabled={sendingEmails.includes(previewBuyerId || '') || !emailEditSubject.trim() || !emailEditBody.trim()}
                 >
                   {sendingEmails.includes(previewBuyerId || '')
                     ? <Loader2 size={14} className="animate-spin" />
