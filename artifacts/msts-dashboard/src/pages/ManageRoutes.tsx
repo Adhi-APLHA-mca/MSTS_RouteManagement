@@ -15,14 +15,20 @@ export function ManageRoutes() {
   } = useMsts();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all');
+  const [routeFilter, setRouteFilter] = useState('all');
   const [selectedRoutes, setSelectedRoutes] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => { loadManageRoutes(); }, [loadManageRoutes]);
 
-  const visibleUsers = useMemo(() => managedUsers.filter(user =>
-    user.username.toLowerCase().includes(search.toLowerCase()),
-  ), [managedUsers, search]);
+  const visibleUsers = useMemo(() => managedUsers.filter(user => {
+    const matchesSearch = user.username.toLowerCase().includes(search.toLowerCase());
+    const isBanned = user.accountStatus === 'blocked' || user.deviceStatus === 'blocked';
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'banned' ? isBanned : !isBanned);
+    const matchesRoute = routeFilter === 'all' || user.routeIds.includes(routeFilter);
+    return matchesSearch && matchesStatus && matchesRoute;
+  }), [managedUsers, search, statusFilter, routeFilter]);
 
   const selectedFor = (userId: string, current: string[]) => selectedRoutes[userId] ?? current;
   const toggleRoute = (userId: string, routeId: string, current: string[]) => {
@@ -58,12 +64,57 @@ export function ManageRoutes() {
         </div>
       </div>
 
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
+          {([
+            ['all', 'All'],
+            ['active', 'Active'],
+            ['banned', 'Banned'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setStatusFilter(value)}
+              className={`rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+                statusFilter === value
+                  ? value === 'banned'
+                    ? 'bg-destructive text-destructive-foreground'
+                    : 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {label}
+              <span className="ml-1.5 opacity-70">
+                {value === 'all'
+                  ? managedUsers.length
+                  : managedUsers.filter(user => value === 'banned'
+                    ? user.accountStatus === 'blocked' || user.deviceStatus === 'blocked'
+                    : user.accountStatus !== 'blocked' && user.deviceStatus !== 'blocked').length}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Route:</span>
+          <Select value={routeFilter} onValueChange={setRouteFilter}>
+            <SelectTrigger className="h-9 w-56 text-xs">
+              <SelectValue placeholder="All routes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All routes</SelectItem>
+              {routes.map(route => (
+                <SelectItem key={route.id} value={route.id}>{route.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {manageRoutesLoading ? (
         <div className="flex justify-center py-24 text-muted-foreground"><Loader2 className="animate-spin" /></div>
       ) : visibleUsers.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-20 text-center text-muted-foreground">
           <UserRoundCog className="mx-auto mb-3 opacity-25" size={36} />
-          <p className="text-sm font-medium">{managedUsers.length ? 'No matching users' : 'No users found'}</p>
+          <p className="text-sm font-medium">{managedUsers.length ? 'No users match these filters' : 'No users found'}</p>
         </div>
       ) : (
         <div className="space-y-3">
