@@ -9,6 +9,7 @@ import { Shell } from '@/components/layout/Shell';
 import { Routes } from '@/pages/Routes';
 import { RouteDetail } from '@/pages/RouteDetail';
 import { Models } from '@/pages/Models';
+import { ManageRoutes } from '@/pages/ManageRoutes';
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/routes" component={Routes} />
         <Route path="/routes/:routeId" component={RouteDetail} />
         <Route path="/models" component={Models} />
+        <Route path="/manage-routes" component={ManageRoutes} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

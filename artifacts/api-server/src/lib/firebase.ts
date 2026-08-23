@@ -18,12 +18,15 @@ function parsePrivateKey(raw: string | undefined): string {
 function setupGoogleCredentials() {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
 
+  const projectId = process.env.FIREBASE_TARGET_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_TARGET_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_TARGET_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY;
   const serviceAccount = {
     type: 'service_account',
-    project_id: stripQuotes(process.env.FIREBASE_PROJECT_ID),
+    project_id: stripQuotes(projectId),
     private_key_id: 'replit-secret',
-    private_key: parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-    client_email: stripQuotes(process.env.FIREBASE_CLIENT_EMAIL),
+    private_key: parsePrivateKey(privateKey),
+    client_email: stripQuotes(clientEmail),
     client_id: '',
     auth_uri: 'https://accounts.google.com/o/oauth2/auth',
     token_uri: 'https://oauth2.googleapis.com/token',

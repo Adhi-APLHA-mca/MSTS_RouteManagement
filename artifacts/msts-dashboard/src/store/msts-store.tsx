@@ -6,7 +6,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { apiRoutes, apiBuyers, apiEmail, apiModels, type CreateRoutePayload } from '@/lib/api';
+import { apiRoutes, apiBuyers, apiEmail, apiModels, apiManageRoutes, type CreateRoutePayload, type ManagedUser } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +109,11 @@ interface MstsContextValue {
   addModelTask: (modelId: string, title: string) => Promise<ModelTask>;
   toggleModelTask: (modelId: string, taskId: string, done: boolean) => Promise<void>;
   addModelAdvance: (modelId: string, amount: number, note?: string) => Promise<AdvancePayment>;
+  managedUsers: ManagedUser[];
+  manageRoutesLoading: boolean;
+  loadManageRoutes: () => Promise<void>;
+  updateManagedUserStatus: (userId: string, data: { account?: string; device?: string }) => Promise<void>;
+  updateManagedUserRoutes: (userId: string, routeIds: string[]) => Promise<void>;
 }
 
 const MstsContext = createContext<MstsContextValue | null>(null);
@@ -123,6 +128,8 @@ export function MstsProvider({ children }: { children: ReactNode }) {
   const [buyersLoading, setBuyersLoading] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [manageRoutesLoading, setManageRoutesLoading] = useState(false);
 
   const refreshRoutes = useCallback(async () => {
     try {
@@ -286,6 +293,33 @@ export function MstsProvider({ children }: { children: ReactNode }) {
     return payment;
   }, []);
 
+  const loadManageRoutes = useCallback(async () => {
+    try {
+      setManageRoutesLoading(true);
+      const data = await apiManageRoutes.list();
+      setManagedUsers(data.users);
+      setRoutes(prev => prev.length ? prev : data.routes);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setManageRoutesLoading(false);
+    }
+  }, []);
+
+  const updateManagedUserStatus = useCallback(async (userId: string, data: { account?: string; device?: string }) => {
+    await apiManageRoutes.updateStatus(userId, data);
+    setManagedUsers(prev => prev.map(user => user.id === userId ? {
+      ...user,
+      accountStatus: data.account || user.accountStatus,
+      deviceStatus: data.device || user.deviceStatus,
+    } : user));
+  }, []);
+
+  const updateManagedUserRoutes = useCallback(async (userId: string, routeIds: string[]) => {
+    await apiManageRoutes.updateRoutes(userId, routeIds);
+    setManagedUsers(prev => prev.map(user => user.id === userId ? { ...user, routeIds } : user));
+  }, []);
+
   return (
     <MstsContext.Provider
       value={{
@@ -314,6 +348,11 @@ export function MstsProvider({ children }: { children: ReactNode }) {
         addModelTask,
         toggleModelTask,
         addModelAdvance,
+        managedUsers,
+        manageRoutesLoading,
+        loadManageRoutes,
+        updateManagedUserStatus,
+        updateManagedUserRoutes,
       }}
     >
       {children}

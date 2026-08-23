@@ -5,6 +5,7 @@ import buyersRouter from './buyers.js';
 import emailRouter from './email.js';
 import modelsRouter from './models.js';
 import debugRouter from './debug.js';
+import manageRoutesRouter from './manage-routes.js';
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use('/', buyersRouter);        // handles /routes/:id/buyers and /buyers/
 router.use('/email', emailRouter);
 router.use('/', modelsRouter);        // handles /routes/:id/models and /models/:id
 router.use('/debug', debugRouter);
+router.use('/', manageRoutesRouter);
 
 export default router;

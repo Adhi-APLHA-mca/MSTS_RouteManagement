@@ -94,6 +94,22 @@ export const apiModels = {
     req<any>(`/models/${modelId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ done }) }),
 };
 
+export interface ManagedUser {
+  id: string;
+  username: string;
+  accountStatus: string;
+  deviceStatus: string;
+  routeIds: string[];
+}
+
+export const apiManageRoutes = {
+  list: () => req<{ users: ManagedUser[]; routes: Route[] }>('/manage-routes'),
+  updateStatus: (userId: string, data: { account?: string; device?: string }) =>
+    req<any>(`/manage-routes/users/${userId}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateRoutes: (userId: string, routeIds: string[]) =>
+    req<any>(`/manage-routes/users/${userId}/routes`, { method: 'PUT', body: JSON.stringify({ routeIds }) }),
+};
+
 // ── Email ────────────────────────────────────────────────────────────────────
 
 export const apiEmail = {
