@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Search, UserRoundCog, Check, Save } from 'lucide-react';
+import { Loader2, Search, UserRoundCog, Check, Save, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 
@@ -94,18 +94,30 @@ export function ManageRoutes() {
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Routes associated</p>
-                    <div className="flex flex-wrap gap-2">
-                      {routes.map(route => {
-                        const active = selected.includes(route.id);
-                        return (
-                          <button key={route.id} onClick={() => toggleRoute(user.id, route.id, user.routeIds)}
-                            className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'hover:border-primary/50 text-muted-foreground'}`}>
-                            {active && <Check size={12} className="inline mr-1" />}{route.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between mt-3">
+                    <details className="relative">
+                      <summary className="flex h-9 w-full cursor-pointer list-none items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-xs text-muted-foreground shadow-sm [&::-webkit-details-marker]:hidden">
+                        <span className={selected.length ? 'text-foreground' : 'text-muted-foreground'}>
+                          {selected.length ? `${selected.length} route${selected.length === 1 ? '' : 's'} selected` : 'Select routes…'}
+                        </span>
+                        <ChevronDown size={14} />
+                      </summary>
+                      <div className="absolute left-0 top-11 z-20 w-full min-w-64 rounded-md border bg-popover p-2 text-popover-foreground shadow-md">
+                        {routes.length ? routes.map(route => {
+                          const active = selected.includes(route.id);
+                          return (
+                            <button key={route.id} onClick={() => toggleRoute(user.id, route.id, user.routeIds)}
+                              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted">
+                              <span className={`flex h-4 w-4 items-center justify-center rounded border ${active ? 'bg-primary border-primary text-primary-foreground' : 'border-input'}`}>
+                                {active && <Check size={11} />}
+                              </span>
+                              <span className="truncate">{route.name}</span>
+                              <span className="ml-auto text-muted-foreground">{route.code}</span>
+                            </button>
+                          );
+                        }) : <p className="px-2 py-2 text-xs text-muted-foreground">No routes available. Add a route first.</p>}
+                      </div>
+                    </details>
+                    <div className="flex items-center justify-between mt-3 gap-3">
                       <div className="flex gap-1.5 flex-wrap">
                         {selected.map(id => {
                           const route = routes.find(item => item.id === id);
