@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Route as RouteIcon, Train, Package, UserRoundCog } from "lucide-react";
+import { Route as RouteIcon, Train, Package, UserRoundCog, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -10,6 +10,7 @@ export function Sidebar() {
     { label: "Routes", href: "/routes", icon: RouteIcon },
     { label: "Models", href: "/models", icon: Package },
     { label: "Manage Routes", href: "/manage-routes", icon: UserRoundCog },
+    { label: "Schedule Events", href: "/schedule-events", icon: CalendarClock },
   ];
 
   return (

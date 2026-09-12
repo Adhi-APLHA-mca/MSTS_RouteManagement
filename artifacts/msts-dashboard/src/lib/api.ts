@@ -110,6 +110,71 @@ export const apiManageRoutes = {
     req<any>(`/manage-routes/users/${userId}/routes`, { method: 'PUT', body: JSON.stringify({ routeIds }) }),
 };
 
+// ── Scheduled events ─────────────────────────────────────────────────────────
+
+export interface EventTrain {
+  name: string;
+  driveLink: string;
+}
+
+export interface ScheduledEvent {
+  id: string;
+  name: string;
+  description: string;
+  routeId: string;
+  capacity: number;
+  trains: EventTrain[];
+  consistRequirements: string[];
+  expiryDate: string;
+  registeredCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  name: string;
+  email: string;
+  phone: string;
+  createdAt: string;
+}
+
+export interface ScheduledEventPayload {
+  name: string;
+  description: string;
+  routeId: string;
+  capacity: number;
+  trains: EventTrain[];
+  consistRequirements: string[];
+  expiryDate: string;
+}
+
+export const apiEvents = {
+  list: () => req<ScheduledEvent[]>('/events'),
+
+  create: (data: ScheduledEventPayload) =>
+    req<ScheduledEvent>('/events', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: string, data: ScheduledEventPayload) =>
+    req<ScheduledEvent>(`/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  delete: (id: string) =>
+    req<{ success: boolean }>(`/events/${id}`, { method: 'DELETE' }),
+
+  listRegistrations: (eventId: string) =>
+    req<EventRegistration[]>(`/events/${eventId}/registrations`),
+
+  register: (eventId: string, data: Pick<EventRegistration, 'name' | 'email' | 'phone'>) =>
+    req<EventRegistration>(`/events/${eventId}/register`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  removeRegistration: (eventId: string, registrationId: string) =>
+    req<{ success: boolean }>(`/events/${eventId}/registrations/${registrationId}`, { method: 'DELETE' }),
+};
+
 // ── Email ────────────────────────────────────────────────────────────────────
 
 export const apiEmail = {

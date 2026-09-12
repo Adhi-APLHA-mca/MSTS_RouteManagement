@@ -6,7 +6,19 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { apiRoutes, apiBuyers, apiEmail, apiModels, apiManageRoutes, type CreateRoutePayload, type ManagedUser } from '@/lib/api';
+import {
+  apiRoutes,
+  apiBuyers,
+  apiEmail,
+  apiModels,
+  apiManageRoutes,
+  apiEvents,
+  type CreateRoutePayload,
+  type ManagedUser,
+  type ScheduledEvent,
+  type ScheduledEventPayload,
+  type EventRegistration,
+} from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,6 +126,18 @@ interface MstsContextValue {
   loadManageRoutes: () => Promise<void>;
   updateManagedUserStatus: (userId: string, data: { account?: string; device?: string }) => Promise<void>;
   updateManagedUserRoutes: (userId: string, routeIds: string[]) => Promise<void>;
+
+  // Scheduled event actions
+  events: ScheduledEvent[];
+  eventsLoading: boolean;
+  eventRegistrations: Record<string, EventRegistration[]>;
+  loadEvents: () => Promise<void>;
+  createEvent: (data: ScheduledEventPayload) => Promise<ScheduledEvent>;
+  updateEvent: (id: string, data: ScheduledEventPayload) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
+  loadEventRegistrations: (eventId: string) => Promise<void>;
+  registerForEvent: (eventId: string, data: Pick<EventRegistration, 'name' | 'email' | 'phone'>) => Promise<EventRegistration>;
+  removeEventRegistration: (eventId: string, registrationId: string) => Promise<void>;
 }
 
 const MstsContext = createContext<MstsContextValue | null>(null);
@@ -130,6 +154,9 @@ export function MstsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [manageRoutesLoading, setManageRoutesLoading] = useState(false);
+  const [events, setEvents] = useState<ScheduledEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventRegistrations, setEventRegistrations] = useState<Record<string, EventRegistration[]>>({});
 
   const refreshRoutes = useCallback(async () => {
     try {
@@ -320,6 +347,72 @@ export function MstsProvider({ children }: { children: ReactNode }) {
     setManagedUsers(prev => prev.map(user => user.id === userId ? { ...user, routeIds } : user));
   }, []);
 
+  // ── Scheduled event mutations ───────────────────────────────────────────────
+
+  const loadEvents = useCallback(async () => {
+    try {
+      setEventsLoading(true);
+      const data = await apiEvents.list();
+      setEvents(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  const createEvent = useCallback(async (data: ScheduledEventPayload): Promise<ScheduledEvent> => {
+    const created = await apiEvents.create(data);
+    setEvents(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const updateEvent = useCallback(async (id: string, data: ScheduledEventPayload) => {
+    const updated = await apiEvents.update(id, data);
+    setEvents(prev => prev.map(event => event.id === id ? updated : event));
+  }, []);
+
+  const deleteEvent = useCallback(async (id: string) => {
+    await apiEvents.delete(id);
+    setEvents(prev => prev.filter(event => event.id !== id));
+    setEventRegistrations(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const loadEventRegistrations = useCallback(async (eventId: string) => {
+    const data = await apiEvents.listRegistrations(eventId);
+    setEventRegistrations(prev => ({ ...prev, [eventId]: data }));
+  }, []);
+
+  const registerForEvent = useCallback(async (
+    eventId: string,
+    data: Pick<EventRegistration, 'name' | 'email' | 'phone'>,
+  ): Promise<EventRegistration> => {
+    const created = await apiEvents.register(eventId, data);
+    setEventRegistrations(prev => ({
+      ...prev,
+      [eventId]: [created, ...(prev[eventId] || [])],
+    }));
+    setEvents(prev => prev.map(event =>
+      event.id === eventId ? { ...event, registeredCount: event.registeredCount + 1 } : event,
+    ));
+    return created;
+  }, []);
+
+  const removeEventRegistration = useCallback(async (eventId: string, registrationId: string) => {
+    await apiEvents.removeRegistration(eventId, registrationId);
+    setEventRegistrations(prev => ({
+      ...prev,
+      [eventId]: (prev[eventId] || []).filter(registration => registration.id !== registrationId),
+    }));
+    setEvents(prev => prev.map(event =>
+      event.id === eventId ? { ...event, registeredCount: Math.max(0, event.registeredCount - 1) } : event,
+    ));
+  }, []);
+
   return (
     <MstsContext.Provider
       value={{
@@ -353,6 +446,16 @@ export function MstsProvider({ children }: { children: ReactNode }) {
         loadManageRoutes,
         updateManagedUserStatus,
         updateManagedUserRoutes,
+        events,
+        eventsLoading,
+        eventRegistrations,
+        loadEvents,
+        createEvent,
+        updateEvent,
+        deleteEvent,
+        loadEventRegistrations,
+        registerForEvent,
+        removeEventRegistration,
       }}
     >
       {children}

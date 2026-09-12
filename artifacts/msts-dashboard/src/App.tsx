@@ -10,6 +10,7 @@ import { Routes } from '@/pages/Routes';
 import { RouteDetail } from '@/pages/RouteDetail';
 import { Models } from '@/pages/Models';
 import { ManageRoutes } from '@/pages/ManageRoutes';
+import { ScheduleEvents } from '@/pages/ScheduleEvents';
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/routes/:routeId" component={RouteDetail} />
         <Route path="/models" component={Models} />
         <Route path="/manage-routes" component={ManageRoutes} />
+        <Route path="/schedule-events" component={ScheduleEvents} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
