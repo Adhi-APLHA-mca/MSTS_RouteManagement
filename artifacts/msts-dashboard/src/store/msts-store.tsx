@@ -18,6 +18,7 @@ import {
   type ScheduledEvent,
   type ScheduledEventPayload,
   type EventRegistration,
+  type EventRegistrationPayload,
 } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ interface MstsContextValue {
   updateEvent: (id: string, data: ScheduledEventPayload) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   loadEventRegistrations: (eventId: string) => Promise<void>;
-  registerForEvent: (eventId: string, data: Pick<EventRegistration, 'name' | 'email' | 'phone'>) => Promise<EventRegistration>;
+  registerForEvent: (eventId: string, data: EventRegistrationPayload) => Promise<EventRegistration>;
   removeEventRegistration: (eventId: string, registrationId: string) => Promise<void>;
 }
 
@@ -389,7 +390,7 @@ export function MstsProvider({ children }: { children: ReactNode }) {
 
   const registerForEvent = useCallback(async (
     eventId: string,
-    data: Pick<EventRegistration, 'name' | 'email' | 'phone'>,
+    data: EventRegistrationPayload,
   ): Promise<EventRegistration> => {
     const created = await apiEvents.register(eventId, data);
     setEventRegistrations(prev => ({

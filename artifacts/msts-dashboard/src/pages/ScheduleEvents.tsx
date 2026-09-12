@@ -30,7 +30,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useMsts } from '@/store/msts-store';
-import type { EventRegistration, EventTrain, ScheduledEvent, ScheduledEventPayload } from '@/lib/api';
+import type {
+  EventRegistration,
+  EventRegistrationPayload,
+  EventTrain,
+  ScheduledEvent,
+  ScheduledEventPayload,
+} from '@/lib/api';
 
 type EventStatus = 'active' | 'full' | 'expired';
 
@@ -42,9 +48,11 @@ type EventFormState = {
   trains: EventTrain[];
   consistRequirements: string[];
   expiryDate: string;
+  startDateTime: string;
+  discordLink: string;
 };
 
-const emptyTrain = (): EventTrain => ({ name: '', driveLink: '' });
+const emptyTrain = (): EventTrain => ({ name: '', driveLink: '', startPoint: '', endPoint: '' });
 
 const emptyForm = (routeId = ''): EventFormState => ({
   name: '',
@@ -54,6 +62,8 @@ const emptyForm = (routeId = ''): EventFormState => ({
   trains: [emptyTrain()],
   consistRequirements: [''],
   expiryDate: '',
+  startDateTime: '',
+  discordLink: '',
 });
 
 function getEventStatus(event: ScheduledEvent): EventStatus {
@@ -67,6 +77,19 @@ function formatDate(value: string) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatDateTime(value: string) {
+  if (!value) return 'Start time to be announced';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function getRouteName(routeId: string, routes: { id: string; name: string; code: string }[]) {
@@ -114,6 +137,8 @@ function EventForm({
     trains: event.trains?.length ? event.trains : [emptyTrain()],
     consistRequirements: event.consistRequirements?.length ? event.consistRequirements : [''],
     expiryDate: event.expiryDate || '',
+    startDateTime: event.startDateTime || '',
+    discordLink: event.discordLink || '',
   } : emptyForm(routeOptions[0]?.id || ''));
   const [formError, setFormError] = useState('');
 
@@ -132,15 +157,20 @@ function EventForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const cleanTrains = form.trains
-      .map(train => ({ name: train.name.trim(), driveLink: train.driveLink.trim() }))
+      .map(train => ({
+        name: train.name.trim(),
+        driveLink: train.driveLink.trim(),
+        startPoint: train.startPoint.trim(),
+        endPoint: train.endPoint.trim(),
+      }))
       .filter(train => train.name || train.driveLink);
     const cleanRequirements = form.consistRequirements.map(item => item.trim()).filter(Boolean);
     if (!form.name.trim() || !form.routeId || !form.expiryDate || Number(form.capacity) < 1) {
       setFormError('Name, route, capacity, and expiry date are required.');
       return;
     }
-    if (!cleanTrains.length || cleanTrains.some(train => !train.name || !train.driveLink)) {
-      setFormError('Add at least one train and provide both its name and Drive path.');
+    if (!cleanTrains.length || cleanTrains.some(train => !train.name || !train.driveLink || !train.startPoint || !train.endPoint)) {
+      setFormError('Add a train with its Drive path, start point, and end point.');
       return;
     }
     setFormError('');
@@ -152,6 +182,8 @@ function EventForm({
       trains: cleanTrains,
       consistRequirements: cleanRequirements,
       expiryDate: form.expiryDate,
+      startDateTime: form.startDateTime,
+      discordLink: form.discordLink.trim(),
     });
   };
 
@@ -189,6 +221,14 @@ function EventForm({
           <Label htmlFor="event-expiry">Registration closes <span className="text-destructive">*</span></Label>
           <Input data-testid="input-event-expiry" id="event-expiry" type="date" value={form.expiryDate} onChange={e => setField('expiryDate', e.target.value)} />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="event-start">Event start date &amp; time <span className="font-normal text-muted-foreground">(optional)</span></Label>
+          <Input data-testid="input-event-start" id="event-start" type="datetime-local" value={form.startDateTime} onChange={e => setField('startDateTime', e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="event-discord">Discord channel link <span className="font-normal text-muted-foreground">(optional)</span></Label>
+          <Input data-testid="input-event-discord" id="event-discord" type="url" value={form.discordLink} onChange={e => setField('discordLink', e.target.value)} placeholder="https://discord.gg/…" />
+        </div>
       </div>
 
       <section className="space-y-3 border-t border-border/70 pt-4">
@@ -203,9 +243,11 @@ function EventForm({
         </div>
         <div className="space-y-2.5">
           {form.trains.map((train, index) => (
-            <div data-testid={`row-train-${index}`} key={`train-${index}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <div data-testid={`row-train-${index}`} key={`train-${index}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
               <Input data-testid={`input-train-name-${index}`} value={train.name} onChange={e => updateTrain(index, 'name', e.target.value)} placeholder="Train name" />
               <Input data-testid={`input-train-drive-${index}`} value={train.driveLink} onChange={e => updateTrain(index, 'driveLink', e.target.value)} placeholder="Drive path or link" />
+               <Input data-testid={`input-train-start-${index}`} value={train.startPoint} onChange={e => updateTrain(index, 'startPoint', e.target.value)} placeholder="Start point" />
+               <Input data-testid={`input-train-end-${index}`} value={train.endPoint} onChange={e => updateTrain(index, 'endPoint', e.target.value)} placeholder="End point" />
               <Button data-testid={`button-remove-train-${index}`} type="button" variant="ghost" size="icon" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:mt-0.5" onClick={() => setField('trains', form.trains.filter((_, trainIndex) => trainIndex !== index))} disabled={form.trains.length === 1} aria-label="Remove train">
                 <X size={15} />
               </Button>
@@ -281,8 +323,12 @@ function RegistrationRow({
       <div className="min-w-0 flex-1">
         <p data-testid={`text-registration-name-${registration.id}`} className="truncate text-sm font-medium">{registration.name}</p>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="font-medium text-[#395878]">@{registration.username}</span>
           <span className="inline-flex items-center gap-1"><Mail size={11} /> {registration.email}</span>
           {registration.phone && <span>{registration.phone}</span>}
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {registration.trainName} · {registration.startPoint} → {registration.endPoint}
         </p>
       </div>
       <Button data-testid={`button-remove-registration-${registration.id}`} variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={handleRemove} disabled={removing} aria-label={`Remove ${registration.name}`}>
@@ -314,14 +360,22 @@ function EventCard({
   onEdit: () => void;
   onDelete: () => Promise<void>;
   onLoadRegistrations: () => Promise<void>;
-  onRegister: (data: { name: string; email: string; phone: string }) => Promise<void>;
+  onRegister: (data: EventRegistrationPayload) => Promise<void>;
   onRemoveRegistration: (eventId: string, registrationId: string) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [manifestError, setManifestError] = useState('');
-  const [registrationForm, setRegistrationForm] = useState({ name: '', email: '', phone: '' });
+  const [registrationForm, setRegistrationForm] = useState<EventRegistrationPayload>({
+    username: '',
+    name: '',
+    email: '',
+    phone: '',
+    trainName: '',
+    startPoint: '',
+    endPoint: '',
+  });
   const status = getEventStatus(event);
   const remaining = Math.max(0, event.capacity - event.registeredCount);
   const fillPercentage = Math.min(100, Math.round((event.registeredCount / Math.max(event.capacity, 1)) * 100));
@@ -351,15 +405,19 @@ function EventCard({
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
-    if (!registrationForm.name.trim() || !registrationForm.email.trim()) return;
+    if (!registrationForm.username.trim() || !registrationForm.name.trim() || !registrationForm.trainName || !registrationForm.startPoint.trim() || !registrationForm.endPoint.trim()) return;
     try {
       setRegistering(true);
       await onRegister({
+        ...registrationForm,
+        username: registrationForm.username.trim(),
         name: registrationForm.name.trim(),
         email: registrationForm.email.trim(),
         phone: registrationForm.phone.trim(),
+        startPoint: registrationForm.startPoint.trim(),
+        endPoint: registrationForm.endPoint.trim(),
       });
-      setRegistrationForm({ name: '', email: '', phone: '' });
+      setRegistrationForm({ username: '', name: '', email: '', phone: '', trainName: '', startPoint: '', endPoint: '' });
       toast({ title: 'Passenger added', description: `${registrationForm.name.trim()} is on the manifest.` });
     } catch (error) {
       toast({ title: 'Could not register passenger', description: getErrorMessage(error), variant: 'destructive' });
@@ -402,8 +460,10 @@ function EventCard({
             {event.description && <p data-testid={`text-event-description-${event.id}`} className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">{event.description}</p>}
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
               <span data-testid={`text-event-route-${event.id}`} className="inline-flex items-center gap-1.5 font-medium text-[#395878]"><MapPinned size={13} className="text-[#5f82ad]" /> {routeName}</span>
-              <span data-testid={`text-event-expiry-${event.id}`} className="inline-flex items-center gap-1.5"><CalendarClock size={13} /> Closes {formatDate(event.expiryDate)}</span>
+              <span data-testid={`text-event-start-${event.id}`} className="inline-flex items-center gap-1.5"><CalendarClock size={13} /> Starts {formatDateTime(event.startDateTime)}</span>
+              <span data-testid={`text-event-expiry-${event.id}`} className="inline-flex items-center gap-1.5"><Clock3 size={13} /> Closes {formatDate(event.expiryDate)}</span>
               <span data-testid={`text-event-train-count-${event.id}`} className="inline-flex items-center gap-1.5"><TrainFront size={13} /> {event.trains?.length || 0} train{event.trains?.length === 1 ? '' : 's'}</span>
+              {event.discordLink && <a href={event.discordLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-primary hover:underline">Discord</a>}
             </div>
           </div>
 
@@ -471,9 +531,18 @@ function EventCard({
                   <div><p className="text-sm font-semibold text-[#2d4563]">Add passenger</p><p className="text-[11px] text-muted-foreground">Reserve one place on this run.</p></div>
                 </div>
                 <div className="space-y-3">
+                  <Input data-testid={`input-registration-username-${event.id}`} value={registrationForm.username} onChange={e => setRegistrationForm(current => ({ ...current, username: e.target.value }))} placeholder="Firebase username" required />
                   <Input data-testid={`input-registration-name-${event.id}`} value={registrationForm.name} onChange={e => setRegistrationForm(current => ({ ...current, name: e.target.value }))} placeholder="Full name" required />
-                  <Input data-testid={`input-registration-email-${event.id}`} type="email" value={registrationForm.email} onChange={e => setRegistrationForm(current => ({ ...current, email: e.target.value }))} placeholder="Email address" required />
+                  <Input data-testid={`input-registration-email-${event.id}`} type="email" value={registrationForm.email} onChange={e => setRegistrationForm(current => ({ ...current, email: e.target.value }))} placeholder="Email address (optional)" />
                   <Input data-testid={`input-registration-phone-${event.id}`} value={registrationForm.phone} onChange={e => setRegistrationForm(current => ({ ...current, phone: e.target.value }))} placeholder="Phone number (optional)" />
+                  <Select value={registrationForm.trainName} onValueChange={value => setRegistrationForm(current => ({ ...current, trainName: value }))}>
+                    <SelectTrigger data-testid={`select-registration-train-${event.id}`}><SelectValue placeholder="Choose a train" /></SelectTrigger>
+                    <SelectContent>{(event.trains || []).map(train => <SelectItem key={train.name} value={train.name}>{train.name} · {train.startPoint} → {train.endPoint}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input data-testid={`input-registration-start-${event.id}`} value={registrationForm.startPoint} onChange={e => setRegistrationForm(current => ({ ...current, startPoint: e.target.value }))} placeholder="Your start point" required />
+                    <Input data-testid={`input-registration-end-${event.id}`} value={registrationForm.endPoint} onChange={e => setRegistrationForm(current => ({ ...current, endPoint: e.target.value }))} placeholder="Your end point" required />
+                  </div>
                   <Button data-testid={`button-register-event-${event.id}`} type="submit" className="w-full gap-2" disabled={registering || status !== 'active'}>{registering ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}{status === 'active' ? 'Add to manifest' : 'Registration closed'}</Button>
                 </div>
               </form>

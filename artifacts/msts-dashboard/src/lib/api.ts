@@ -115,6 +115,8 @@ export const apiManageRoutes = {
 export interface EventTrain {
   name: string;
   driveLink: string;
+  startPoint: string;
+  endPoint: string;
 }
 
 export interface ScheduledEvent {
@@ -126,18 +128,11 @@ export interface ScheduledEvent {
   trains: EventTrain[];
   consistRequirements: string[];
   expiryDate: string;
+  startDateTime: string;
+  discordLink: string;
   registeredCount: number;
   createdAt?: string;
   updatedAt?: string;
-}
-
-export interface EventRegistration {
-  id: string;
-  eventId: string;
-  name: string;
-  email: string;
-  phone: string;
-  createdAt: string;
 }
 
 export interface ScheduledEventPayload {
@@ -148,6 +143,31 @@ export interface ScheduledEventPayload {
   trains: EventTrain[];
   consistRequirements: string[];
   expiryDate: string;
+  startDateTime: string;
+  discordLink: string;
+}
+
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  username: string;
+  name: string;
+  email: string;
+  phone: string;
+  trainName: string;
+  startPoint: string;
+  endPoint: string;
+  createdAt: string;
+}
+
+export interface EventRegistrationPayload {
+  username: string;
+  name: string;
+  email: string;
+  phone: string;
+  trainName: string;
+  startPoint: string;
+  endPoint: string;
 }
 
 export const apiEvents = {
@@ -165,7 +185,7 @@ export const apiEvents = {
   listRegistrations: (eventId: string) =>
     req<EventRegistration[]>(`/events/${eventId}/registrations`),
 
-  register: (eventId: string, data: Pick<EventRegistration, 'name' | 'email' | 'phone'>) =>
+  register: (eventId: string, data: EventRegistrationPayload) =>
     req<EventRegistration>(`/events/${eventId}/register`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -173,6 +193,14 @@ export const apiEvents = {
 
   removeRegistration: (eventId: string, registrationId: string) =>
     req<{ success: boolean }>(`/events/${eventId}/registrations/${registrationId}`, { method: 'DELETE' }),
+};
+
+export const apiEventUsers = {
+  login: (username: string) =>
+    req<{ id: string; username: string }>('/event-users/login', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    }),
 };
 
 // ── Email ────────────────────────────────────────────────────────────────────

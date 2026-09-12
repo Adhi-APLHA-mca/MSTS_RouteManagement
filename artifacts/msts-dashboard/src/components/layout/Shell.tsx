@@ -71,10 +71,13 @@ export function Sidebar() {
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const isPublicEventPortal = location === "/events";
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar />
-      <main className="flex-1 ml-60 min-h-screen">
+      {!isPublicEventPortal && <Sidebar />}
+      <main className={cn("flex-1 min-h-screen", !isPublicEventPortal && "ml-60")}>
         {children}
       </main>
     </div>

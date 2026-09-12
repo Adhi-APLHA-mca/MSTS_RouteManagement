@@ -7,7 +7,12 @@ function eventPayload(body: any, existing: any = {}) {
   const trains = Array.isArray(body.trains)
     ? body.trains
         .filter((train: any) => train?.name?.trim())
-        .map((train: any) => ({ name: String(train.name).trim(), driveLink: String(train.driveLink || '').trim() }))
+        .map((train: any) => ({
+          name: String(train.name).trim(),
+          driveLink: String(train.driveLink || '').trim(),
+          startPoint: String(train.startPoint || '').trim(),
+          endPoint: String(train.endPoint || '').trim(),
+        }))
     : existing.trains || [];
   const consistRequirements = Array.isArray(body.consistRequirements)
     ? body.consistRequirements.map((item: any) => String(item).trim()).filter(Boolean)
@@ -21,15 +26,35 @@ function eventPayload(body: any, existing: any = {}) {
     trains,
     consistRequirements,
     expiryDate: String(body.expiryDate ?? existing.expiryDate ?? ''),
+    startDateTime: String(body.startDateTime ?? existing.startDateTime ?? ''),
+    discordLink: String(body.discordLink ?? existing.discordLink ?? '').trim(),
   };
 }
 
-async function getEventWithCount(id: string) {
-  const doc = await db.collection('events').doc(id).get();
-  if (!doc.exists) return null;
-  const data = doc.data()!;
-  return { id: doc.id, ...data, registeredCount: Number(data.registeredCount || 0) };
+async function findUserByUsername(username: string) {
+  const normalized = String(username || '').trim();
+  if (!normalized) return null;
+  const snap = await db.collection('users').where('userbase.username', '==', normalized).limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, username: normalized, data: doc.data() };
 }
+
+// POST /api/event-users/login — username-only access for registered Firebase users
+router.post('/event-users/login', async (req, res) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    if (!username) return res.status(400).json({ error: 'Username is required' });
+    const user = await findUserByUsername(username);
+    if (!user) return res.status(401).json({ error: 'That username is not registered' });
+    if (String(user.data.status?.account || '').toLowerCase() === 'banned') {
+      return res.status(403).json({ error: 'This account cannot register for events' });
+    }
+    return res.json({ id: user.id, username: user.username });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to verify username', detail: err.message });
+  }
+});
 
 // GET /api/events
 router.get('/events', async (_req, res) => {
@@ -121,6 +146,13 @@ router.post('/events/:id/register', async (req, res) => {
     const eventRef = db.collection('events').doc(req.params.id);
     const registrationRef = db.collection('eventRegistrations').doc();
     const now = new Date();
+    const username = String(req.body.username || '').trim();
+    if (!username) throw new Error('USERNAME_REQUIRED');
+    const user = await findUserByUsername(username);
+    if (!user) throw new Error('USER_NOT_FOUND');
+    if (String(user.data.status?.account || '').toLowerCase() === 'banned') {
+      throw new Error('USER_BANNED');
+    }
     const event = await db.runTransaction(async transaction => {
       const eventDoc = await transaction.get(eventRef);
       if (!eventDoc.exists) throw new Error('EVENT_NOT_FOUND');
@@ -132,12 +164,22 @@ router.post('/events/:id/register', async (req, res) => {
       }
       const registration = {
         eventId: req.params.id,
-        name: String(req.body.name || '').trim(),
+        username,
+        name: String(req.body.name || req.body.username || '').trim(),
         email: String(req.body.email || '').trim(),
         phone: String(req.body.phone || '').trim(),
+        trainName: String(req.body.trainName || '').trim(),
+        startPoint: String(req.body.startPoint || '').trim(),
+        endPoint: String(req.body.endPoint || '').trim(),
         createdAt: now.toISOString(),
       };
       if (!registration.name) throw new Error('NAME_REQUIRED');
+      if (!registration.trainName) throw new Error('TRAIN_REQUIRED');
+      if (!Array.isArray(data.trains) || !data.trains.some((train: any) => train.name === registration.trainName)) {
+        throw new Error('TRAIN_NOT_FOUND');
+      }
+      if (!registration.startPoint) throw new Error('START_REQUIRED');
+      if (!registration.endPoint) throw new Error('END_REQUIRED');
       transaction.set(registrationRef, registration);
       transaction.update(eventRef, { registeredCount: registeredCount + 1, updatedAt: now.toISOString() });
       return { ...registration, id: registrationRef.id };
@@ -148,7 +190,14 @@ router.post('/events/:id/register', async (req, res) => {
       EVENT_NOT_FOUND: [404, 'Event not found'],
       EVENT_FULL: [409, 'Event capacity is full'],
       EVENT_EXPIRED: [409, 'Event has expired'],
+      USERNAME_REQUIRED: [400, 'Username is required'],
+      USER_NOT_FOUND: [401, 'That username is not registered'],
+      USER_BANNED: [403, 'This account cannot register for events'],
       NAME_REQUIRED: [400, 'Person name is required'],
+      TRAIN_REQUIRED: [400, 'Choose a train'],
+      TRAIN_NOT_FOUND: [400, 'Choose a train from this event'],
+      START_REQUIRED: [400, 'Start point is required'],
+      END_REQUIRED: [400, 'End point is required'],
     };
     const [status, message] = errors[err.message] || [500, err.message || 'Failed to register'];
     res.status(status).json({ error: message });
