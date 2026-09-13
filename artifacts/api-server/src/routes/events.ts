@@ -61,23 +61,32 @@ router.get('/events', async (_req, res) => {
   try {
     const snap = await db.collection('events').get();
     const publicView = _req.query.public === '1';
-    const events = snap.docs
-      .map(doc => {
+    const events = await Promise.all(snap.docs
+      .map(async doc => {
         const data = doc.data();
+        let trains = Array.isArray(data.trains) ? data.trains : [];
+        if (publicView && trains.length) {
+          const registrations = await db.collection('eventRegistrations')
+            .where('eventId', '==', doc.id)
+            .get();
+          const occupied = new Set(registrations.docs.map(registration => String(registration.data().trainName || '').trim().toLowerCase()));
+          trains = trains.filter((train: any) => !occupied.has(String(train.name || '').trim().toLowerCase()));
+        }
         return {
           id: doc.id,
           ...data,
           trains: publicView
-            ? (Array.isArray(data.trains) ? data.trains.map((train: any) => ({
+            ? trains.map((train: any) => ({
                 name: String(train.name || ''),
                 startPoint: String(train.startPoint || ''),
                 endPoint: String(train.endPoint || ''),
-              })) : [])
-            : data.trains,
+              }))
+            : trains,
           registeredCount: Number(data.registeredCount || 0),
         };
       })
-      .sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      )
+      .then(items => items.sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt))));
     res.json(events);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to load events', detail: err.message });
@@ -211,6 +220,13 @@ router.post('/events/:id/register', async (req, res) => {
         ? data.trains.find((train: any) => train.name === String(req.body.trainName || '').trim())
         : null;
       if (!selectedTrain) throw new Error('TRAIN_NOT_FOUND');
+      const existingTrain = await transaction.get(
+        db.collection('eventRegistrations')
+          .where('eventId', '==', req.params.id)
+          .where('trainName', '==', selectedTrain.name)
+          .limit(1),
+      );
+      if (!existingTrain.empty) throw new Error('TRAIN_ALREADY_ASSIGNED');
       if (!String(selectedTrain.startPoint || '').trim()) throw new Error('START_NOT_CONFIGURED');
       if (!String(selectedTrain.endPoint || '').trim()) throw new Error('END_NOT_CONFIGURED');
 
@@ -243,6 +259,7 @@ router.post('/events/:id/register', async (req, res) => {
       NAME_REQUIRED: [400, 'Person name is required'],
       TRAIN_REQUIRED: [400, 'Choose a train'],
       TRAIN_NOT_FOUND: [400, 'Choose a train from this event'],
+      TRAIN_ALREADY_ASSIGNED: [409, 'This train is already assigned to another person'],
       START_NOT_CONFIGURED: [409, 'This train has no start point configured'],
       END_NOT_CONFIGURED: [409, 'This train has no end point configured'],
     };

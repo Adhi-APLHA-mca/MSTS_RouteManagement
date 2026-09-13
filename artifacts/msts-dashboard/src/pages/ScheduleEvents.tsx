@@ -101,6 +101,10 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Try again.';
 }
 
+function normalizeTrainName(name: string) {
+  return name.trim().toLowerCase();
+}
+
 function StatusBadge({ status }: { status: EventStatus }) {
   const copy = {
     active: { label: 'Active', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: Check },
@@ -377,6 +381,8 @@ function EventCard({
     endPoint: '',
   });
   const status = getEventStatus(event);
+  const occupiedTrainNames = new Set((registrations || []).map(registration => normalizeTrainName(registration.trainName)));
+  const availableTrains = event.trains.filter(train => !occupiedTrainNames.has(normalizeTrainName(train.name)));
   const remaining = Math.max(0, event.capacity - event.registeredCount);
   const fillPercentage = Math.min(100, Math.round((event.registeredCount / Math.max(event.capacity, 1)) * 100));
 
@@ -537,8 +543,9 @@ function EventCard({
                   <Input data-testid={`input-registration-phone-${event.id}`} value={registrationForm.phone} onChange={e => setRegistrationForm(current => ({ ...current, phone: e.target.value }))} placeholder="Phone number (optional)" />
                   <Select value={registrationForm.trainName} onValueChange={value => setRegistrationForm(current => ({ ...current, trainName: value }))}>
                     <SelectTrigger data-testid={`select-registration-train-${event.id}`}><SelectValue placeholder="Choose a train" /></SelectTrigger>
-                    <SelectContent>{(event.trains || []).map(train => <SelectItem key={train.name} value={train.name}>{train.name} · {train.startPoint} → {train.endPoint}</SelectItem>)}</SelectContent>
+                    <SelectContent>{availableTrains.map(train => <SelectItem key={train.name} value={train.name}>{train.name} · {train.startPoint} → {train.endPoint}</SelectItem>)}</SelectContent>
                   </Select>
+                  {!availableTrains.length && <p className="text-xs text-amber-700">All trains in this event are already assigned.</p>}
                   <div className="grid grid-cols-2 gap-2">
                     <Input data-testid={`input-registration-start-${event.id}`} value={registrationForm.startPoint} onChange={e => setRegistrationForm(current => ({ ...current, startPoint: e.target.value }))} placeholder="Your start point" required />
                     <Input data-testid={`input-registration-end-${event.id}`} value={registrationForm.endPoint} onChange={e => setRegistrationForm(current => ({ ...current, endPoint: e.target.value }))} placeholder="Your end point" required />
