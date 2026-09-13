@@ -260,7 +260,7 @@ function EventForm({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">Consist requirements</h3>
-            <p className="text-xs text-muted-foreground">Optional checks for participants before sign-up.</p>
+            <p className="text-xs text-muted-foreground">Optional checks for drivers before sign-up.</p>
           </div>
           <Button data-testid="button-add-requirement" type="button" size="sm" variant="outline" onClick={() => setField('consistRequirements', [...form.consistRequirements, ''])} className="gap-1.5">
             <Plus size={13} /> Add requirement
@@ -418,9 +418,9 @@ function EventCard({
         endPoint: registrationForm.endPoint.trim(),
       });
       setRegistrationForm({ username: '', name: '', email: '', phone: '', trainName: '', startPoint: '', endPoint: '' });
-      toast({ title: 'Passenger added', description: `${registrationForm.name.trim()} is on the manifest.` });
+      toast({ title: 'Driver added', description: `${registrationForm.name.trim()} is on the driver manifest.` });
     } catch (error) {
-      toast({ title: 'Could not register passenger', description: getErrorMessage(error), variant: 'destructive' });
+      toast({ title: 'Could not register driver', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setRegistering(false);
     }
@@ -498,7 +498,7 @@ function EventCard({
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7890aa]">Passenger manifest</p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7890aa]">Driver manifest</p>
                     <p className="mt-1 text-xs text-muted-foreground">{registrations?.length || 0} record{registrations?.length === 1 ? '' : 's'} loaded</p>
                   </div>
                   <div className="rounded-md bg-[#eaf1f8] px-2 py-1 font-mono text-[11px] text-[#4e6c8d]">CAP {event.capacity}</div>
@@ -520,7 +520,7 @@ function EventCard({
                   <div data-testid={`empty-registrations-${event.id}`} className="rounded-xl border border-dashed border-[#cbd8e7] bg-card px-4 py-8 text-center">
                     <Users size={22} className="mx-auto mb-2 text-[#9aacc0]" />
                     <p className="text-sm font-medium text-[#45617f]">Manifest is clear</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Add the first passenger using the form.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Add the first driver using the form.</p>
                   </div>
                 )}
               </div>
@@ -528,7 +528,7 @@ function EventCard({
               <form onSubmit={handleRegister} className="rounded-xl border border-[#d6e2ef] bg-card p-4 shadow-[0_1px_2px_rgba(34,55,82,0.03)]">
                 <div className="mb-4 flex items-center gap-2">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#e8f0f8] text-[#5279a3]"><UserPlus size={14} /></div>
-                  <div><p className="text-sm font-semibold text-[#2d4563]">Add passenger</p><p className="text-[11px] text-muted-foreground">Reserve one place on this run.</p></div>
+                  <div><p className="text-sm font-semibold text-[#2d4563]">Add driver</p><p className="text-[11px] text-muted-foreground">Reserve one driver place on this run.</p></div>
                 </div>
                 <div className="space-y-3">
                   <Input data-testid={`input-registration-username-${event.id}`} value={registrationForm.username} onChange={e => setRegistrationForm(current => ({ ...current, username: e.target.value }))} placeholder="Firebase username" required />
@@ -673,7 +673,7 @@ export function ScheduleEvents() {
           {[
             { label: 'Scheduled', value: stats.total, detail: 'all event records', icon: CalendarClock, color: 'text-[#4d6f98]', test: 'scheduled' },
             { label: 'Open now', value: stats.active, detail: 'accepting registrations', icon: ShieldCheck, color: 'text-emerald-600', test: 'active' },
-            { label: 'On manifests', value: stats.registered, detail: 'registered passengers', icon: Users, color: 'text-[#b07a21]', test: 'registered' },
+            { label: 'On manifests', value: stats.registered, detail: 'registered drivers', icon: Users, color: 'text-[#b07a21]', test: 'registered' },
             { label: 'Places open', value: stats.openPlaces, detail: 'across all events', icon: TrainFront, color: 'text-[#7a65a8]', test: 'open-places' },
           ].map(stat => {
             const Icon = stat.icon;

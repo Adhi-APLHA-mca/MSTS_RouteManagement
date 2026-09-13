@@ -6,6 +6,12 @@ import { motion } from "framer-motion";
 export function Sidebar() {
   const [location] = useLocation();
 
+  const logout = () => {
+    window.localStorage.removeItem('msts-manager-token');
+    window.localStorage.removeItem('msts-manager-username');
+    window.location.href = '/';
+  };
+
   const navItems = [
     { label: "Routes", href: "/routes", icon: RouteIcon },
     { label: "Models", href: "/models", icon: Package },
@@ -64,6 +70,7 @@ export function Sidebar() {
         <div className="rounded-xl bg-sidebar-foreground/5 px-4 py-3 border border-sidebar-border/30">
           <p className="text-[11px] font-semibold text-sidebar-foreground/70">Route Owner Panel</p>
           <p className="text-[10px] text-sidebar-foreground/40 mt-0.5">Manage your network</p>
+          <button type="button" onClick={logout} className="mt-3 text-[10px] font-semibold text-sidebar-foreground/55 hover:text-sidebar-foreground">Sign out</button>
         </div>
       </div>
     </div>

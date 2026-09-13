@@ -60,8 +60,23 @@ router.post('/event-users/login', async (req, res) => {
 router.get('/events', async (_req, res) => {
   try {
     const snap = await db.collection('events').get();
+    const publicView = _req.query.public === '1';
     const events = snap.docs
-      .map(doc => ({ id: doc.id, ...doc.data(), registeredCount: Number(doc.data().registeredCount || 0) }))
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          trains: publicView
+            ? (Array.isArray(data.trains) ? data.trains.map((train: any) => ({
+                name: String(train.name || ''),
+                startPoint: String(train.startPoint || ''),
+                endPoint: String(train.endPoint || ''),
+              })) : [])
+            : data.trains,
+          registeredCount: Number(data.registeredCount || 0),
+        };
+      })
       .sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt)));
     res.json(events);
   } catch (err: any) {
@@ -140,6 +155,36 @@ router.get('/events/:id/registrations', async (req, res) => {
   }
 });
 
+// GET /api/events/:id/registration?username=... — participant's own pass
+router.get('/events/:id/registration', async (req, res) => {
+  try {
+    const username = String(req.query.username || '').trim();
+    if (!username) return res.status(400).json({ error: 'Username is required' });
+
+    const eventDoc = await db.collection('events').doc(req.params.id).get();
+    if (!eventDoc.exists) return res.status(404).json({ error: 'Event not found' });
+
+    const snap = await db.collection('eventRegistrations')
+      .where('eventId', '==', req.params.id)
+      .get();
+    const registrationDoc = snap.docs.find(doc => doc.data().username === username);
+    if (!registrationDoc) return res.status(404).json({ error: 'Registration not found' });
+
+    const registration = registrationDoc.data();
+    const train = Array.isArray(eventDoc.data()?.trains)
+      ? eventDoc.data()?.trains.find((item: any) => item.name === registration.trainName)
+      : null;
+
+    return res.json({
+      id: registrationDoc.id,
+      ...registration,
+      driveLink: String(train?.driveLink || ''),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to load registration', detail: err.message });
+  }
+});
+
 // POST /api/events/:id/register — capacity is protected by a Firestore transaction
 router.post('/events/:id/register', async (req, res) => {
   try {
@@ -162,27 +207,29 @@ router.post('/events/:id/register', async (req, res) => {
       if (data.expiryDate && new Date(`${data.expiryDate}T23:59:59`).getTime() < now.getTime()) {
         throw new Error('EVENT_EXPIRED');
       }
+      const selectedTrain = Array.isArray(data.trains)
+        ? data.trains.find((train: any) => train.name === String(req.body.trainName || '').trim())
+        : null;
+      if (!selectedTrain) throw new Error('TRAIN_NOT_FOUND');
+      if (!String(selectedTrain.startPoint || '').trim()) throw new Error('START_NOT_CONFIGURED');
+      if (!String(selectedTrain.endPoint || '').trim()) throw new Error('END_NOT_CONFIGURED');
+
       const registration = {
         eventId: req.params.id,
         username,
         name: String(req.body.name || req.body.username || '').trim(),
         email: String(req.body.email || '').trim(),
         phone: String(req.body.phone || '').trim(),
-        trainName: String(req.body.trainName || '').trim(),
-        startPoint: String(req.body.startPoint || '').trim(),
-        endPoint: String(req.body.endPoint || '').trim(),
+        trainName: selectedTrain.name,
+        startPoint: String(selectedTrain.startPoint).trim(),
+        endPoint: String(selectedTrain.endPoint).trim(),
         createdAt: now.toISOString(),
       };
       if (!registration.name) throw new Error('NAME_REQUIRED');
       if (!registration.trainName) throw new Error('TRAIN_REQUIRED');
-      if (!Array.isArray(data.trains) || !data.trains.some((train: any) => train.name === registration.trainName)) {
-        throw new Error('TRAIN_NOT_FOUND');
-      }
-      if (!registration.startPoint) throw new Error('START_REQUIRED');
-      if (!registration.endPoint) throw new Error('END_REQUIRED');
       transaction.set(registrationRef, registration);
       transaction.update(eventRef, { registeredCount: registeredCount + 1, updatedAt: now.toISOString() });
-      return { ...registration, id: registrationRef.id };
+      return { ...registration, driveLink: String(selectedTrain.driveLink || ''), id: registrationRef.id };
     });
     res.status(201).json(event);
   } catch (err: any) {
@@ -196,8 +243,8 @@ router.post('/events/:id/register', async (req, res) => {
       NAME_REQUIRED: [400, 'Person name is required'],
       TRAIN_REQUIRED: [400, 'Choose a train'],
       TRAIN_NOT_FOUND: [400, 'Choose a train from this event'],
-      START_REQUIRED: [400, 'Start point is required'],
-      END_REQUIRED: [400, 'End point is required'],
+      START_NOT_CONFIGURED: [409, 'This train has no start point configured'],
+      END_NOT_CONFIGURED: [409, 'This train has no end point configured'],
     };
     const [status, message] = errors[err.message] || [500, err.message || 'Failed to register'];
     res.status(status).json({ error: message });

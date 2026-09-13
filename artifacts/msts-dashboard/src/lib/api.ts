@@ -1,10 +1,11 @@
 import type { Route, Buyer } from '@/store/msts-store';
 
-const BASE = '/api';
+const BASE = import.meta.env.VITE_API_BASE || '/api';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = window.localStorage.getItem('msts-manager-token');
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...init,
   });
   if (!res.ok) {
@@ -13,6 +14,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+export const apiManagerAuth = {
+  login: (username: string, password: string) =>
+    req<{ token: string; username: string }>('/manager-auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+};
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +166,7 @@ export interface EventRegistration {
   trainName: string;
   startPoint: string;
   endPoint: string;
+  driveLink?: string;
   createdAt: string;
 }
 
@@ -171,7 +181,7 @@ export interface EventRegistrationPayload {
 }
 
 export const apiEvents = {
-  list: () => req<ScheduledEvent[]>('/events'),
+  list: (publicView = false) => req<ScheduledEvent[]>(`/events${publicView ? '?public=1' : ''}`),
 
   create: (data: ScheduledEventPayload) =>
     req<ScheduledEvent>('/events', { method: 'POST', body: JSON.stringify(data) }),
@@ -184,6 +194,9 @@ export const apiEvents = {
 
   listRegistrations: (eventId: string) =>
     req<EventRegistration[]>(`/events/${eventId}/registrations`),
+
+  findRegistration: (eventId: string, username: string) =>
+    req<EventRegistration>(`/events/${eventId}/registration?username=${encodeURIComponent(username)}`),
 
   register: (eventId: string, data: EventRegistrationPayload) =>
     req<EventRegistration>(`/events/${eventId}/register`, {

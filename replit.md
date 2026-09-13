@@ -28,7 +28,9 @@ Other useful commands:
 | `GROK_API_KEY` | [x.ai console](https://console.x.ai) | Used for AI-generated welcome emails only; app starts without it |
 | `DATABASE_URL` | Auto-provisioned by Replit | Postgres connection string — do not set manually |
 
-Non-secret env vars already set in `.replit` (`FIREBASE_PROJECT_ID`, `FIREBASE_AUTH_DOMAIN`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`).
+The Firebase project ID must be set as `FIREBASE_PROJECT_ID=mstsor-v1` in local `.env` or the Replit Secrets panel. SMTP host, port, and sender are stored as non-secret shared settings in `.replit`.
+
+Route manager accounts use a Firestore `users` document containing `username`, `password`, `role: "route_manager"`, and `active: true`. The public `/events` portal is not behind this manager guard.
 
 ## Stack
 

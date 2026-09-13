@@ -132,7 +132,7 @@ interface MstsContextValue {
   events: ScheduledEvent[];
   eventsLoading: boolean;
   eventRegistrations: Record<string, EventRegistration[]>;
-  loadEvents: () => Promise<void>;
+  loadEvents: (publicView?: boolean) => Promise<void>;
   createEvent: (data: ScheduledEventPayload) => Promise<ScheduledEvent>;
   updateEvent: (id: string, data: ScheduledEventPayload) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
@@ -350,10 +350,10 @@ export function MstsProvider({ children }: { children: ReactNode }) {
 
   // ── Scheduled event mutations ───────────────────────────────────────────────
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (publicView = false) => {
     try {
       setEventsLoading(true);
-      const data = await apiEvents.list();
+      const data = await apiEvents.list(publicView);
       setEvents(data);
     } catch (err: any) {
       setError(err.message);

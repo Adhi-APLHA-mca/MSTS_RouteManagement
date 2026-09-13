@@ -12,26 +12,31 @@ import { Models } from '@/pages/Models';
 import { ManageRoutes } from '@/pages/ManageRoutes';
 import { ScheduleEvents } from '@/pages/ScheduleEvents';
 import EventPortal from '@/pages/EventPortal';
+import { ManagerLogin } from '@/pages/ManagerLogin';
 
-const queryClient = new QueryClient();
+function ManagerApp() {
+  const hasToken = Boolean(window.localStorage.getItem('msts-manager-token'));
+  if (!hasToken) return <ManagerLogin />;
 
-function Router() {
   return (
     <Shell>
       <Switch>
-        <Route path="/">
-          <Redirect to="/routes" />
-        </Route>
+        <Route path="/"><Redirect to="/routes" /></Route>
         <Route path="/routes" component={Routes} />
         <Route path="/routes/:routeId" component={RouteDetail} />
         <Route path="/models" component={Models} />
         <Route path="/manage-routes" component={ManageRoutes} />
         <Route path="/schedule-events" component={ScheduleEvents} />
-        <Route path="/events" component={EventPortal} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
   );
+}
+
+const queryClient = new QueryClient();
+
+function Router() {
+  return <Switch><Route path="/events" component={EventPortal} /><Route component={ManagerApp} /></Switch>;
 }
 
 function App() {

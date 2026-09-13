@@ -13,6 +13,7 @@ import {
   Radio,
   RefreshCw,
   ShieldCheck,
+  Ticket,
   TrainFront,
   UserRound,
   UsersRound,
@@ -35,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { apiEventUsers } from '@/lib/api';
+import { apiEventUsers, apiEvents } from '@/lib/api';
 import type {
   EventRegistration,
   EventTrain,
@@ -158,15 +159,17 @@ function TrainSummary({ train }: { train: EventTrain }) {
             <span>{train.endPoint}</span>
           </p>
         </div>
-        <a
-          href={train.driveLink}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-[#327a67] transition-colors hover:bg-[#e2f1eb] hover:text-[#1d5d4d]"
-          aria-label={`Open Drive link for ${train.name}`}
-        >
-          Drive <ExternalLink size={11} />
-        </a>
+        {train.driveLink && (
+          <a
+            href={train.driveLink}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-[#327a67] transition-colors hover:bg-[#e2f1eb] hover:text-[#1d5d4d]"
+            aria-label={`Open Drive link for ${train.name}`}
+          >
+            Drive <ExternalLink size={11} />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -176,11 +179,15 @@ function EventCard({
   event,
   route,
   username,
+  registrationKnown,
+  registered,
   onRegister,
 }: {
   event: ScheduledEvent;
   route: string;
   username: string;
+  registrationKnown: boolean;
+  registered: boolean;
   onRegister: (event: ScheduledEvent) => void;
 }) {
   const full = event.capacity <= 0 || event.registeredCount >= event.capacity;
@@ -242,21 +249,19 @@ function EventCard({
           </div>
         </div>
 
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#87a09a]">
-              Available consists
-            </p>
-            <span className="text-[11px] font-medium text-[#78908b]">{event.trains?.length || 0} options</span>
+        {username && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#87a09a]">Available consists</p>
+              <span className="text-[11px] font-medium text-[#78908b]">{event.trains?.length || 0} options</span>
+            </div>
+            <div className="grid gap-2">
+              {event.trains?.length ? event.trains.map(train => <TrainSummary key={train.name} train={train} />) : (
+                <p className="rounded-xl border border-dashed border-[#ccdcd6] px-4 py-4 text-sm text-[#78908b]">Train details will be shared by the event host.</p>
+              )}
+            </div>
           </div>
-          <div className="grid gap-2">
-            {event.trains?.length ? event.trains.map(train => <TrainSummary key={train.name} train={train} />) : (
-              <p className="rounded-xl border border-dashed border-[#ccdcd6] px-4 py-4 text-sm text-[#78908b]">
-                Train details will be shared by the event host.
-              </p>
-            )}
-          </div>
-        </div>
+          )}
 
         {!!event.consistRequirements?.length && (
           <div className="mt-4 rounded-xl bg-[#f5f0e6] px-3.5 py-3">
@@ -279,11 +284,11 @@ function EventCard({
           <Button
             type="button"
             onClick={() => onRegister(event)}
-            disabled={full || !event.trains?.length}
+            disabled={!event.trains?.length || (!!username && !registrationKnown)}
             className="h-10 gap-2 rounded-lg bg-[#286c5b] px-4 text-sm font-semibold text-[#f8fffb] shadow-none hover:bg-[#1f5b4c] disabled:bg-[#b5c3be]"
           >
-            {full ? 'Event is full' : 'Reserve my place'}
-            {!full && <ArrowRight size={15} />}
+            {registered ? 'Boarding pass issued' : full ? 'Event is full' : 'Reserve my place'}
+            {registered ? <Ticket size={15} /> : !full && <ArrowRight size={15} />}
           </Button>
         </div>
       </div>
@@ -312,6 +317,9 @@ export default function EventPortal() {
   const [registering, setRegistering] = useState(false);
   const [success, setSuccess] = useState<EventRegistration | null>(null);
   const [loadAttempted, setLoadAttempted] = useState(false);
+  const [checkingRegistration, setCheckingRegistration] = useState(false);
+  const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set());
+  const [registrationStatusesLoaded, setRegistrationStatusesLoaded] = useState(false);
 
   useEffect(() => {
     const storedUsername = window.sessionStorage.getItem(SESSION_USERNAME_KEY);
@@ -321,7 +329,7 @@ export default function EventPortal() {
 
   useEffect(() => {
     let mounted = true;
-    loadEvents().finally(() => {
+    loadEvents(true).finally(() => {
       if (mounted) setLoadAttempted(true);
     });
     return () => { mounted = false; };
@@ -336,15 +344,57 @@ export default function EventPortal() {
     [events],
   );
 
+  useEffect(() => {
+    if (!username || !loadAttempted) {
+      setRegisteredEventIds(new Set());
+      setRegistrationStatusesLoaded(!username);
+      return;
+    }
+    let active = true;
+    setRegistrationStatusesLoaded(false);
+    Promise.all(visibleEvents.map(async event => {
+      try {
+        await apiEvents.findRegistration(event.id, username);
+        return event.id;
+      } catch {
+        return null;
+      }
+    })).then(ids => {
+      if (!active) return;
+      setRegisteredEventIds(new Set(ids.filter((id): id is string => Boolean(id))));
+      setRegistrationStatusesLoaded(true);
+    });
+    return () => { active = false; };
+  }, [username, loadAttempted, visibleEvents]);
+
   const selectedTrain = selectedEvent?.trains.find(train => train.name === registration.trainName);
   const selectedRoute = selectedEvent ? routeLabel(selectedEvent.routeId, routes) : '';
 
+  const showExistingRegistration = async (event: ScheduledEvent, verifiedUsername: string) => {
+    setCheckingRegistration(true);
+    try {
+      const existing = await apiEvents.findRegistration(event.id, verifiedUsername);
+      setRegisteredEventIds(current => new Set(current).add(event.id));
+      setSuccess(existing);
+    } catch {
+      setRegisteredEventIds(current => {
+        const next = new Set(current);
+        next.delete(event.id);
+        return next;
+      });
+      setSuccess(null);
+    } finally {
+      setCheckingRegistration(false);
+    }
+  };
+
   const openRegistration = (event: ScheduledEvent) => {
-    if (isEventExpired(event) || event.registeredCount >= event.capacity) return;
+    if (isEventExpired(event)) return;
     setSelectedEvent(event);
     setRegistration(emptyRegistration());
     setRegistrationError('');
     setSuccess(null);
+    if (username) void showExistingRegistration(event, username);
     if (!username) {
       setLoginValue('');
       setLoginError('');
@@ -367,6 +417,7 @@ export default function EventPortal() {
       window.sessionStorage.setItem(SESSION_USERNAME_KEY, verifiedUsername);
       setUsername(verifiedUsername);
       setLoginOpen(false);
+      if (selectedEvent) await showExistingRegistration(selectedEvent, verifiedUsername);
     } catch (loginFailure) {
       setLoginError(getErrorMessage(loginFailure));
     } finally {
@@ -383,12 +434,12 @@ export default function EventPortal() {
 
   const handleRegistration = async (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedEvent || !username || !selectedTrain) {
+    if (!selectedEvent || !username || !selectedTrain || checkingRegistration) {
       setRegistrationError('Choose one of the available trains before continuing.');
       return;
     }
-    if (!registration.startPoint.trim() || !registration.endPoint.trim()) {
-      setRegistrationError('Add your boarding and alighting points to complete the manifest.');
+    if (!selectedTrain.startPoint.trim() || !selectedTrain.endPoint.trim()) {
+      setRegistrationError('This train is missing its route-manager boarding points.');
       return;
     }
     if (isEventExpired(selectedEvent)) {
@@ -408,9 +459,10 @@ export default function EventPortal() {
         email: registration.email.trim(),
         phone: registration.phone.trim(),
         trainName: selectedTrain.name,
-        startPoint: registration.startPoint.trim(),
-        endPoint: registration.endPoint.trim(),
+        startPoint: selectedTrain.startPoint,
+        endPoint: selectedTrain.endPoint,
       });
+      setRegisteredEventIds(current => new Set(current).add(selectedEvent.id));
       setSuccess(created);
     } catch (registrationFailure) {
       setRegistrationError(getErrorMessage(registrationFailure));
@@ -452,7 +504,7 @@ export default function EventPortal() {
                 </div>
               ) : (
                 <Button type="button" variant="outline" onClick={() => setLoginOpen(true)} className="h-9 gap-2 rounded-lg border-[#cbdad4] bg-[#fffdf9] text-xs text-[#42645d] hover:bg-[#edf6f1]">
-                  <LogIn size={14} /> Participant sign in
+                  <LogIn size={14} /> Driver sign in
                 </Button>
               )
             )}
@@ -471,7 +523,7 @@ export default function EventPortal() {
                 <span className="block text-[#327a67]">railway run.</span>
               </h1>
               <p className="mt-6 max-w-xl text-base leading-7 text-[#607875] sm:text-lg">
-                Join fellow MSTS operators on a shared route. Pick your consist, tell the dispatcher where you will board, and receive the details you need for departure.
+                  Join fellow MSTS locomotive drivers on a shared route. Pick your consist and receive the dispatch details you need for departure.
               </p>
             </div>
             <div className="rounded-2xl border border-[#d6e3dd] bg-[#e8f1ec] p-5 sm:p-6">
@@ -515,7 +567,7 @@ export default function EventPortal() {
               <CircleAlert size={23} className="mx-auto text-[#b36c3f]" />
               <h3 className="mt-3 text-base font-semibold text-[#74452e]">The timetable could not be loaded</h3>
               <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-[#93694f]">{storeError}</p>
-              <Button type="button" variant="outline" onClick={() => { setLoadAttempted(false); void loadEvents().finally(() => setLoadAttempted(true)); }} className="mt-5 gap-2 border-[#e2c3a9] bg-[#fffaf4] text-[#8a583b] hover:bg-[#fff1e1]">
+              <Button type="button" variant="outline" onClick={() => { setLoadAttempted(false); void loadEvents(true).finally(() => setLoadAttempted(true)); }} className="mt-5 gap-2 border-[#e2c3a9] bg-[#fffaf4] text-[#8a583b] hover:bg-[#fff1e1]">
                 <RefreshCw size={14} /> Try again
               </Button>
             </div>
@@ -538,6 +590,8 @@ export default function EventPortal() {
                     event={event}
                     route={routeLabel(event.routeId, routes)}
                     username={username}
+                    registrationKnown={!username || registrationStatusesLoaded}
+                    registered={registeredEventIds.has(event.id)}
                     onRegister={openRegistration}
                   />
                 ))}
@@ -553,7 +607,7 @@ export default function EventPortal() {
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#e2f1eb] text-[#286c5b]">
               <UserRound size={19} />
             </div>
-            <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.03em] text-[#183a3a]">Participant sign in</DialogTitle>
+            <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.03em] text-[#183a3a]">Driver sign in</DialogTitle>
             <DialogDescription className="pt-1 text-sm leading-6 text-[#607875]">
               Enter the username used for your MSTS community account. We will verify it before opening registration.
             </DialogDescription>
@@ -583,44 +637,9 @@ export default function EventPortal() {
         <DialogContent className="max-w-2xl rounded-2xl border-[#d6e3dd] bg-[#fffdf9] p-0">
           {selectedEvent && (
             success ? (
-              <div className="p-6 sm:p-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#d9eee5] text-[#286c5b]">
-                  <Check size={25} strokeWidth={2.5} />
-                </div>
-                <DialogHeader className="mt-5">
-                  <DialogTitle className="font-display text-3xl font-semibold tracking-[-0.04em] text-[#183a3a]">You are on the manifest.</DialogTitle>
-                  <DialogDescription className="pt-2 text-sm leading-6 text-[#607875]">
-                    Your place for <strong className="font-semibold text-[#365853]">{selectedEvent.name}</strong> is confirmed under <strong className="font-semibold text-[#365853]">@{username}</strong>.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl bg-[#f1f7f3] p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Departure</p>
-                    <p className="mt-1.5 text-sm font-semibold text-[#365853]">{formatDateTime(selectedEvent.startDateTime)}</p>
-                  </div>
-                  <div className="rounded-xl bg-[#f1f7f3] p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Your train</p>
-                    <p className="mt-1.5 text-sm font-semibold text-[#365853]">{success.trainName}</p>
-                    <p className="mt-1 text-xs text-[#78908b]">{success.startPoint} <ArrowRight className="mx-1 inline" size={11} /> {success.endPoint}</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  {selectedTrain?.driveLink && (
-                    <a href={selectedTrain.driveLink} target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[#cbdad4] bg-[#fbfcf9] px-4 text-sm font-semibold text-[#327a67] hover:bg-[#edf6f1]">
-                      Open Drive link <ExternalLink size={14} />
-                    </a>
-                  )}
-                  {selectedEvent.discordLink && (
-                    <a href={selectedEvent.discordLink} target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#286c5b] px-4 text-sm font-semibold text-[#f8fffb] hover:bg-[#1f5b4c]">
-                      Join event Discord <ExternalLink size={14} />
-                    </a>
-                  )}
-                </div>
-                <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#e7ece9] pt-5">
-                  <p className="text-xs leading-5 text-[#78908b]">Keep these links handy for the day of the run.</p>
-                  <Button type="button" onClick={closeRegistration} className="shrink-0 gap-2 rounded-lg bg-[#183a3a] text-[#f8fffb] shadow-none hover:bg-[#234b49]">Done <Check size={14} /></Button>
-                </div>
-              </div>
+              <BoardingPass event={selectedEvent} registration={success} onClose={closeRegistration} />
+            ) : checkingRegistration ? (
+              <div className="p-10 text-center text-sm text-[#607875]">Checking your event registration…</div>
             ) : (
               <form onSubmit={handleRegistration} className="p-6 sm:p-8">
                 <DialogHeader>
@@ -637,12 +656,20 @@ export default function EventPortal() {
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="event-train" className="text-xs font-semibold text-[#42645d]">Choose your train <span className="text-[#b36c3f]">*</span></Label>
-                    <Select value={registration.trainName} onValueChange={value => setRegistration(current => ({ ...current, trainName: value }))}>
+                    <Select value={registration.trainName} onValueChange={value => {
+                      const train = selectedEvent.trains.find(item => item.name === value);
+                      setRegistration(current => ({
+                        ...current,
+                        trainName: value,
+                        startPoint: train?.startPoint || '',
+                        endPoint: train?.endPoint || '',
+                      }));
+                    }}>
                       <SelectTrigger id="event-train" className="h-11 rounded-lg border-[#cbdad4] bg-[#fbfcf9]">
                         <SelectValue placeholder="Select an available train" />
                       </SelectTrigger>
                       <SelectContent>
-                        {selectedEvent.trains.map(train => <SelectItem key={train.name} value={train.name}>{train.name} · {train.startPoint} → {train.endPoint}</SelectItem>)}
+                        {selectedEvent.trains.map(train => <SelectItem key={train.name} value={train.name}>{train.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -655,21 +682,16 @@ export default function EventPortal() {
                           <p className="text-sm font-semibold text-[#365853]">{selectedTrain.name}</p>
                           <p className="mt-1 text-xs text-[#607875]">Route: {selectedTrain.startPoint} <ArrowRight className="mx-1 inline" size={11} /> {selectedTrain.endPoint}</p>
                         </div>
-                        <a href={selectedTrain.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#327a67] hover:text-[#1f5b4c]">Drive <ExternalLink size={12} /></a>
                       </div>
                     </motion.div>
                   )}
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="event-start-point" className="text-xs font-semibold text-[#42645d]">Your start point <span className="text-[#b36c3f]">*</span></Label>
-                      <Input id="event-start-point" value={registration.startPoint} onChange={event => setRegistration(current => ({ ...current, startPoint: event.target.value }))} placeholder="Where will you board?" className="h-11 rounded-lg border-[#cbdad4] bg-[#fbfcf9]" />
+                  {selectedTrain && (
+                    <div className="rounded-xl border border-[#dce9e2] bg-[#f8faf7] px-4 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Route manager’s boarding points</p>
+                      <p className="mt-1.5 text-sm font-semibold text-[#365853]">{selectedTrain.startPoint} <ArrowRight className="mx-1 inline" size={13} /> {selectedTrain.endPoint}</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="event-end-point" className="text-xs font-semibold text-[#42645d]">Your end point <span className="text-[#b36c3f]">*</span></Label>
-                      <Input id="event-end-point" value={registration.endPoint} onChange={event => setRegistration(current => ({ ...current, endPoint: event.target.value }))} placeholder="Where will you leave?" className="h-11 rounded-lg border-[#cbdad4] bg-[#fbfcf9]" />
-                    </div>
-                  </div>
+                  )}
 
                   <div className="border-t border-[#e7ece9] pt-4">
                     <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Optional contact details</p>
@@ -695,5 +717,36 @@ export default function EventPortal() {
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+function BoardingPass({ event, registration, onClose }: { event: ScheduledEvent; registration: EventRegistration; onClose: () => void }) {
+  return (
+    <div className="relative overflow-hidden rounded-[1.35rem] border border-[#bdd9cd] bg-[#f2f8f4] p-5 shadow-[0_18px_45px_rgba(40,108,91,0.12)] sm:p-7">
+      <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full border-[18px] border-[#dceee5]" />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-4 border-b border-dashed border-[#bdd9cd] pb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#286c5b] text-[#f8fffb]"><Ticket size={21} /></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5f8c7c]">MSTS community</p><p className="mt-1 text-sm font-semibold text-[#183a3a]">Boarding pass</p></div>
+          </div>
+          <Badge className="border-[#b9d8cf] bg-[#dff1e8] text-[10px] font-bold uppercase tracking-[0.12em] text-[#276b57]">Confirmed</Badge>
+        </div>
+        <div className="py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f9991]">Event</p>
+          <h3 className="mt-1 font-display text-2xl font-semibold leading-tight text-[#183a3a]">{event.name}</h3>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-[#e3f0e9] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Loco pilot</p><p className="mt-1.5 text-sm font-semibold text-[#365853]">@{registration.username}</p></div>
+            <div className="rounded-xl bg-[#e3f0e9] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Departure</p><p className="mt-1.5 text-sm font-semibold text-[#365853]">{formatDateTime(event.startDateTime)}</p></div>
+          </div>
+          <div className="mt-3 rounded-xl border border-[#cfe2d9] bg-[#fbfdf9] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#7f9991]">Your train</p><p className="mt-1.5 text-base font-semibold text-[#365853]">{registration.trainName}</p><p className="mt-1 text-xs text-[#607875]">{registration.startPoint} <ArrowRight className="mx-1 inline" size={12} /> {registration.endPoint}</p></div>
+        </div>
+        <div className="border-t border-dashed border-[#bdd9cd] pt-5">
+          {registration.driveLink ? <a href={registration.driveLink} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#286c5b] px-4 text-sm font-semibold text-[#f8fffb] hover:bg-[#1f5b4c]">Open your train file <ExternalLink size={15} /></a> : <p className="rounded-lg border border-[#e5d9c6] bg-[#fff9ef] px-3 py-2.5 text-xs leading-5 text-[#856d4f]">The train file link has not been added by the route manager yet.</p>}
+          <p className="mt-3 text-center text-[11px] leading-5 text-[#6d8980]">Paste this file into the route path. Remove all old paths before using this.</p>
+        </div>
+        <Button type="button" onClick={onClose} className="mt-5 h-10 w-full rounded-lg bg-[#183a3a] text-[#f8fffb] shadow-none hover:bg-[#234b49]">Done <Check size={14} /></Button>
+      </div>
+    </div>
   );
 }

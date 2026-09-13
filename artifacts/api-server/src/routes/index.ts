@@ -7,10 +7,22 @@ import modelsRouter from './models.js';
 import debugRouter from './debug.js';
 import manageRoutesRouter from './manage-routes.js';
 import eventsRouter from './events.js';
+import managerAuthRouter from './manager-auth.js';
+import { requireManagerAuth } from '../middlewares/manager-auth.js';
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(managerAuthRouter);
+router.use((req, res, next) => {
+	const publicEventRequest =
+		req.path.startsWith('/event-users/') ||
+		(req.path === '/events' && req.method === 'GET') ||
+		(req.path.match(/^\/events\/[^/]+\/register$/) && req.method === 'POST') ||
+		(req.path.match(/^\/events\/[^/]+\/registration$/) && req.method === 'GET');
+	if (publicEventRequest) return next();
+	return requireManagerAuth(req, res, next);
+});
 router.use('/routes', routesRouter);
 router.use('/', buyersRouter);        // handles /routes/:id/buyers and /buyers/:id
 router.use('/email', emailRouter);

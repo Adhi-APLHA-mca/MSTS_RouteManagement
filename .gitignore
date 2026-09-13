@@ -11,6 +11,15 @@ out-tsc
 # dependencies
 node_modules
 
+# local credentials
+.env
+.env.*
+!.env.example
+*.service-account.json
+mstsor-v1-*.json
+adminpass.txt
+*.pem
+
 # IDEs and editors
 /.idea
 .project

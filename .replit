@@ -21,11 +21,6 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-FIREBASE_PROJECT_ID = "tscr-ee8a7"
-FIREBASE_AUTH_DOMAIN = "tscr-ee8a7.firebaseapp.com"
-FIREBASE_STORAGE_BUCKET = "tscr-ee8a7.firebasestorage.app"
-FIREBASE_MESSAGING_SENDER_ID = "951205413692"
-FIREBASE_APP_ID = "1:951205413692:web:7df5d7859e836dc49a1439"
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = "587"
 SMTP_FROM = "teamtscr.aba@gmail.com"
